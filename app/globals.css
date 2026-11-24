@@ -1,26 +1,69 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * ORBIT design system — MISRCONSULT brand theme.
+ * Semantic tokens are defined as CSS variables so a future brand can re-theme
+ * the product by changing values only. Dark mode switches the same tokens.
+ */
 @theme inline {
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-support: var(--brand-support);
+  --color-brand-support-alt: var(--brand-support-alt);
+  --color-forest: var(--forest);
+  --color-forest-deep: var(--forest-deep);
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-border: var(--border);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  /* MISRCONSULT brand palette */
+  --brand-primary: #146010;
+  --brand-secondary: #267226;
+  --brand-accent: #7cd424;
+  --brand-support: #5eb726;
+  --brand-support-alt: #5bb52b;
+  /* Brand color used for text-level emphasis; switches for dark-mode contrast */
+  --brand-strong: #146010;
+  --forest: #10382a;
+  --forest-deep: #101810;
+
+  /* Light theme */
+  --background: #f5f7f4;
+  --surface: #ffffff;
+  --surface-muted: #edf2ec;
+  --foreground: #18221c;
+  --foreground-muted: #51604f;
+  --border: #dde5de;
+  --danger: #b3261e;
+  --danger-surface: #fbedec;
+}
+
+.dark {
+  /* Dark theme */
+  --brand-strong: #7cd424;
+  --background: #101810;
+  --surface: #16211a;
+  --surface-muted: #1b2820;
+  --foreground: #f2f6f2;
+  --foreground-muted: #9db0a1;
+  --border: #26352b;
+  --danger: #f2b8b5;
+  --danger-surface: #3a1b19;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100dvh;
 }
