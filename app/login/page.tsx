@@ -4,9 +4,10 @@ import { fetchMe } from "@/lib/server/api";
 import { SESSION_COOKIE } from "@/lib/server/session";
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { ClearSession } from "@/components/clear-session";
 import { LoginForm } from "./login-form";
-import { brand } from "@/lib/brand";
+import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ notice?: string | string[] | undefined }>;
 }) {
+  const { t } = await getI18n();
   const params = await searchParams;
   const notice = typeof params.notice === "string" ? params.notice : null;
 
@@ -42,7 +44,8 @@ export default async function LoginPage({
 
   return (
     <main className="flex min-h-dvh bg-background">
-      {/* Brand panel */}
+      {/* Brand panel: product name, company identity and logo only.
+          No slogan or service description is rendered. */}
       <aside className="relative hidden w-1/2 overflow-hidden bg-forest lg:flex lg:flex-col lg:justify-between lg:p-12">
         {/* Triangular lattice overlay, inspired by the MISRCONSULT identity */}
         <svg
@@ -68,14 +71,8 @@ export default async function LoginPage({
             </pattern>
           </defs>
           <rect width="600" height="800" fill="url(#lattice)" />
-          <polygon
-            points="600,0 600,430 240,0"
-            fill="rgba(94,183,38,0.14)"
-          />
-          <polygon
-            points="600,470 600,800 250,800"
-            fill="rgba(20,96,16,0.35)"
-          />
+          <polygon points="600,0 600,430 240,0" fill="rgba(94,183,38,0.14)" />
+          <polygon points="600,470 600,800 250,800" fill="rgba(20,96,16,0.35)" />
           <polygon
             points="600,470 600,800 250,800"
             fill="none"
@@ -88,44 +85,50 @@ export default async function LoginPage({
           {/* The logo keeps its original colors; a light chip preserves
               contrast against the dark forest panel. */}
           <div className="inline-flex rounded-xl bg-white p-3 shadow-lg shadow-black/20">
-            <BrandLogo className="h-14 w-auto" />
+            <BrandLogo alt={t("brand.logoAlt")} className="h-14 w-auto" />
           </div>
         </div>
 
-        <div className="relative flex flex-col gap-4">
-          <h1 className="max-w-md text-4xl font-extrabold leading-tight tracking-tight text-white">
-            {brand.headline}
+        <div className="relative flex flex-col gap-3">
+          <h1 className="text-4xl font-extrabold tracking-tight text-white">
+            {t("brand.companyName")}
           </h1>
-          <p className="text-sm font-medium uppercase tracking-[0.3em] text-brand-accent">
-            {brand.supportingLine}
+          <p className="text-lg font-semibold tracking-wide text-brand-accent">
+            {t("brand.productName")}
           </p>
         </div>
 
-        <p className="relative text-xs text-white/60">{brand.footerLine}</p>
+        <p className="relative text-xs text-white/60">{t("brand.footerLine")}</p>
       </aside>
 
       {/* Form panel */}
       <section className="relative flex flex-1 flex-col px-6 py-8 sm:px-12">
-        <div className="flex items-center justify-between">
-          <span className="text-lg font-extrabold tracking-tight text-foreground">
-            ORBIT<span className="text-brand-strong"> HR</span>
-          </span>
-          <ThemeToggle />
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-base font-extrabold tracking-tight text-foreground sm:text-lg">
+              {t("brand.companyName")}
+            </p>
+            <p className="truncate text-xs font-medium text-foreground-muted">
+              {t("brand.productName")}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <LanguageSwitcher />
+            <ThemeToggle />
+          </div>
         </div>
 
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm">
             <div className="mb-6 flex justify-center lg:hidden">
               <div className="rounded-xl bg-white p-2.5 shadow-md shadow-black/10">
-                <BrandLogo className="h-11 w-auto" />
+                <BrandLogo alt={t("brand.logoAlt")} className="h-11 w-auto" />
               </div>
             </div>
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
-              Welcome back
+              {t("auth.welcomeBack")}
             </h2>
-            <p className="mt-1 text-sm text-foreground-muted">
-              Sign in to your workspace.
-            </p>
+            <p className="mt-1 text-sm text-foreground-muted">{t("auth.signInSubtitle")}</p>
             <div className="mt-8">
               <LoginForm notice={notice} />
             </div>
@@ -133,7 +136,7 @@ export default async function LoginPage({
         </div>
 
         <p className="text-center text-xs text-foreground-muted lg:hidden">
-          {brand.footerLine}
+          {t("brand.footerLine")}
         </p>
       </section>
     </main>

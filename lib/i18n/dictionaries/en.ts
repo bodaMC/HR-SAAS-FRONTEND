@@ -1,0 +1,148 @@
+/**
+ * English dictionary. This file defines the Dictionary type: every other
+ * locale must provide exactly the same shape, enforced at compile time.
+ * Add new modules as nested groups here first, never as inline strings
+ * inside components.
+ */
+export const en = {
+  brand: {
+    productName: "CONURE HR",
+    companyName: "MISRCONSULT",
+    footerLine: "MISRCONSULT · CONURE HR",
+    logoAlt: "MISRCONSULT logo",
+    metadataDescription: "CONURE HR, the human resources platform by MISRCONSULT.",
+  },
+  common: {
+    soon: "Soon",
+    roadmap: "Roadmap",
+    tryAgain: "Try again",
+    show: "Show",
+    hide: "Hide",
+    close: "Close",
+    emailUnavailable: "Email unavailable",
+  },
+  nav: {
+    main: "Main navigation",
+    open: "Open navigation",
+    close: "Close navigation",
+    collapse: "Collapse sidebar",
+    expand: "Expand sidebar",
+    userMenu: "User menu",
+    plannedMeaning: "Planned for a future phase",
+    roadmapMeaning: "Roadmap: planned architecture, no backend module yet",
+    sections: {
+      workspace: "Workspace",
+      organization: "Organization",
+      hrManagement: "HR Management",
+      administration: "Administration",
+    },
+    items: {
+      dashboard: "Dashboard",
+      myProfile: "My Profile",
+      employees: "Employees",
+      departments: "Departments",
+      jobTitles: "Job Titles",
+      orgStructure: "Organization Structure",
+      projects: "Projects",
+      leaveManagement: "Leave Management",
+      permissions: "Permissions",
+      compensatoryTime: "Compensatory Time",
+      approvalCenter: "Approval Center",
+      workSchedules: "Work Schedules",
+      holidays: "Holidays",
+      companySettings: "Company Settings",
+      approvalWorkflows: "Approval Workflows",
+      auditLogs: "Audit Logs",
+    },
+  },
+  roles: {
+    owner: "Owner",
+    admin: "Admin",
+    manager: "Manager",
+    employee: "Employee",
+    unknown: "Unknown role",
+  },
+  theme: {
+    label: "Theme",
+    light: "Light",
+    dark: "Dark",
+    system: "System",
+  },
+  language: {
+    label: "Language",
+    english: "English",
+    arabic: "العربية",
+    switchLabel: "التبديل إلى العربية",
+  },
+  auth: {
+    welcomeBack: "Welcome back",
+    signInSubtitle: "Sign in to your workspace.",
+    workEmail: "Work email",
+    password: "Password",
+    passwordPlaceholder: "Your password",
+    signIn: "Sign in",
+    signOut: "Sign out",
+    signingOut: "Signing you out…",
+    clearFailed:
+      "Your session could not be cleared automatically. Please try again.",
+    logoutFailedNetwork:
+      "Sign-out could not be completed. Check your connection and try again.",
+    logoutFailed: "Sign-out could not be completed. Please try again.",
+    errorReview: "Please review the highlighted fields.",
+    errorFieldInvalid: "Review this field.",
+    errorAccessDenied: "Access denied. Please contact your administrator.",
+    errorRateLimited: "Too many attempts. Please wait a moment and try again.",
+    errorUnavailable:
+      "The authentication service is unavailable. Please try again later.",
+    errorFailed: "Sign in failed. Please try again.",
+    errorNetwork: "Network error. Check your connection and try again.",
+    noticeExpired: "Your session has expired. Please sign in again.",
+    noticeInactive:
+      "Your account or company is inactive. Please contact your administrator.",
+    noticeUnavailable:
+      "The authentication service is unavailable. Please try again later.",
+    noticeLogoutUnconfirmed:
+      "Signed out on this device, but the server could not confirm token revocation.",
+  },
+  dashboard: {
+    title: "Dashboard",
+    loading: "Loading dashboard",
+    welcomeBack: "Welcome back, {name}",
+    companyFallback: "Your company",
+    profileUnavailable: "Your profile details are unavailable right now.",
+    serviceUnavailable: "The service is unavailable right now. Please try again later.",
+    kpi: {
+      employees: "Employees",
+      departments: "Departments",
+      pendingLeave: "Pending leave requests",
+      pendingPermissions: "Pending permission requests",
+      activeOf: "{active} active of {total} in your scope",
+      activeCount: "{count} active",
+      scopeNote: "Returned for your role's scope",
+      noEmployees: "No employees yet.",
+      noDepartments: "No departments yet.",
+      employeeDataUnavailable: "Employee data is unavailable right now.",
+      departmentDataUnavailable: "Department data is unavailable right now.",
+      figureUnavailable: "This figure is unavailable right now.",
+    },
+    recentLeave: "Recent leave requests",
+    recentPermissions: "Recent permission requests",
+    recentUnavailable: "Recent activity is unavailable right now.",
+    noLeaveYet: "No leave requests yet.",
+    noPermissionsYet: "No permission requests yet.",
+    unknownEmployee: "Unknown employee",
+    leaveFallback: "Leave",
+    permissionFallback: "Permission",
+    leaveDays: "{count} d",
+    dateTo: "to",
+    status: {
+      pending: "Pending",
+      approved: "Approved",
+      rejected: "Rejected",
+      cancelled: "Cancelled",
+      unknown: "Unknown",
+    },
+  },
+};
+
+export type Dictionary = typeof en;

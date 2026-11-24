@@ -77,6 +77,9 @@ try {
   const settle = (ms = 600) => page.waitForTimeout(ms);
 
   async function login(email) {
+    // Fresh session per scenario: earlier scenarios may have left a valid
+    // session cookie (which makes /login redirect to /).
+    await ctx.clearCookies();
     await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' });
     const emailEl = page.getByLabel(/email/i);
     await emailEl.waitFor();
@@ -107,6 +110,11 @@ try {
   await login('demo@orbit.example');
   check('owner dashboard welcome renders', await page.getByTestId('welcome-name').textContent() === 'Welcome back, Demo Owner');
   check('owner role badge', await page.getByTestId('role-badge').textContent() === 'Owner');
+  // Phase 2.1: the user menu trigger is the identity zone at the bottom
+  // of the sidebar; the menu carries the full identity and sign-out.
+  check('sidebar user zone trigger shows name and role',
+    (await page.getByTestId('sidebar-user-zone').getByText('Demo Owner', { exact: true }).count()) === 1 &&
+    (await page.getByTestId('sidebar-user-zone').getByText('Owner', { exact: true }).count()) === 1);
   await page.getByRole('button', { name: 'User menu' }).click();
   await page.getByTestId('user-menu').waitFor({ state: 'visible' });
   check('user menu opens with name/email/role',
@@ -351,12 +359,61 @@ try {
   check('dashboard renders after delayed backend', (await slowPage.getByTestId('welcome-name').textContent()) === 'Welcome back, Demo Slow');
   await slowPage.close();
 
+  // ---- 9c. Object-shaped but field-invalid records: widget unavailable ----
+  await login('badempfields@orbit.example');
+  check('invalid employee record -> employees KPI unavailable', (await page.getByTestId('kpi-unavailable').count()) === 1);
+  check('other KPIs intact (badempfields)', (await page.getByTestId('departments-total').textContent()) === '3' && (await page.getByTestId('pending-count').count()) === 2);
+  check('no fabricated employee count (badempfields)', (await page.getByTestId('employees-total').count()) === 0);
+  await signOut();
+  await page.waitForURL((u) => u.pathname.startsWith('/login'));
+
+  await login('baddeptfields@orbit.example');
+  check('invalid department record -> departments KPI unavailable', (await page.getByTestId('kpi-unavailable').count()) === 1);
+  check('other KPIs intact (baddeptfields)', (await page.getByTestId('employees-total').textContent()) === '3' && (await page.getByTestId('pending-count').count()) === 2);
+  await signOut();
+  await page.waitForURL((u) => u.pathname.startsWith('/login'));
+
+  await login('badleavefields@orbit.example');
+  check('invalid leave record -> its recent list unavailable, no crash', (await page.getByTestId('recent-unavailable').count()) === 1);
+  check('pending KPIs intact (badleavefields)', (await page.getByTestId('pending-count').count()) === 2);
+  check('no bogus status rendered', !/bogus-status/i.test((await page.textContent('body')) ?? ''));
+  await signOut();
+  await page.waitForURL((u) => u.pathname.startsWith('/login'));
+
+  await login('badpermfields@orbit.example');
+  check('invalid permission record -> its recent list unavailable, no crash', (await page.getByTestId('recent-unavailable').count()) === 1);
+  check('pending KPIs intact (badpermfields)', (await page.getByTestId('pending-count').count()) === 2);
+  await signOut();
+  await page.waitForURL((u) => u.pathname.startsWith('/login'));
+
+  await login('badempstatus@orbit.example');
+  check('unknown employment_status string -> employees KPI unavailable', (await page.getByTestId('kpi-unavailable').count()) === 1);
+  check('other KPIs intact (badempstatus)', (await page.getByTestId('departments-total').textContent()) === '3' && (await page.getByTestId('pending-count').count()) === 2);
+  check('no fabricated employee count or unknown status text', (await page.getByTestId('employees-total').count()) === 0 && !/astronaut/i.test((await page.textContent('body')) ?? ''));
+  await signOut();
+  await page.waitForURL((u) => u.pathname.startsWith('/login'));
+
+  // ---- 9d. /me 200 with wrong-typed identity fields: fail closed, no crash ----
+  await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' });
+  await page.getByLabel(/email/i).waitFor();
+  await page.waitForLoadState('networkidle');
+  await page.getByLabel(/email/i).fill('badidentity@orbit.example');
+  await page.getByLabel(/password/i).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  const identityAlert = page.locator('div[role="alert"]:not(#__next-route-announcer__)').filter({ hasText: /unavailable/i }).first();
+  await identityAlert.waitFor({ timeout: 25000 });
+  check('wrong-typed identity fields show unavailable, no render crash', await identityAlert.isVisible());
+  check('no private widgets on bad identity shape', (await page.getByTestId('employees-total').count()) === 0 && (await page.getByTestId('welcome-name').count()) === 0);
+
   console.log(results.join('\n'));
   const failed = results.filter(r => r.startsWith('FAIL')).length;
   console.log(`\n${results.length - failed}/${results.length} checks passed`);
   if (failed > 0) process.exitCode = 1;
 } catch (err) {
+  console.log(results.join('\n'));
   console.error('E2E harness error:', err);
+  try { console.log('DBG page url:', page.url()); } catch {}
+  try { console.log('DBG body:', ((await page.textContent('body')) ?? '').replace(/\s+/g, ' ').slice(0, 400)); } catch {}
   process.exitCode = 1;
 } finally {
   if (browser) await browser.close();

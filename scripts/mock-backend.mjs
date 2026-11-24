@@ -33,6 +33,19 @@
  *   badperm@orbit.example         /permission-requests returns 200 with a
  *                                 negative meta.total
  *                                 (per-widget malformed-envelope tests)
+ *   badempfields@orbit.example    /employees 200 with a record missing
+ *                                 employment_status (record-content test)
+ *   baddeptfields@orbit.example   /departments 200 with is_active: "yes"
+ *   badleavefields@orbit.example  /leave-requests recent page carries a
+ *                                 record with a bogus status, non-numeric
+ *                                 days and an object-shaped first_name
+ *   badpermfields@orbit.example   /permission-requests recent page carries
+ *                                 a record with numeric date + bad timestamp
+ *   badidentity@orbit.example     /me 200 with non-string name/email
+ *                                 (identity shape fail-closed test)
+ *   badempstatus@orbit.example    /employees 200 with a well-formed record
+ *                                 whose employment_status is outside the
+ *                                 verified enum (must not be counted)
  *
  * Usage: node scripts/mock-backend.mjs   (listens on 127.0.0.1:4100)
  */
@@ -153,6 +166,48 @@ const DEMO = {
     role: "owner", is_active: true, email_verified_at: null,
     created_at: "2026-01-01T00:00:00.000000Z", updated_at: "2026-01-01T00:00:00.000000Z",
   },
+  badempfieldsToken: "mock-sanctum-token-badempfields",
+  badempfieldsUser: {
+    id: 13, uuid: "3f6d0f62-4d9b-4f2a-9f3a-0demo0000014",
+    name: "Demo Badempfields", email: "badempfields@orbit.example", phone: null,
+    role: "owner", is_active: true, email_verified_at: null,
+    created_at: "2026-01-01T00:00:00.000000Z", updated_at: "2026-01-01T00:00:00.000000Z",
+  },
+  baddeptfieldsToken: "mock-sanctum-token-baddeptfields",
+  baddeptfieldsUser: {
+    id: 14, uuid: "3f6d0f62-4d9b-4f2a-9f3a-0demo0000015",
+    name: "Demo Baddeptfields", email: "baddeptfields@orbit.example", phone: null,
+    role: "owner", is_active: true, email_verified_at: null,
+    created_at: "2026-01-01T00:00:00.000000Z", updated_at: "2026-01-01T00:00:00.000000Z",
+  },
+  badleavefieldsToken: "mock-sanctum-token-badleavefields",
+  badleavefieldsUser: {
+    id: 15, uuid: "3f6d0f62-4d9b-4f2a-9f3a-0demo0000016",
+    name: "Demo Badleavefields", email: "badleavefields@orbit.example", phone: null,
+    role: "owner", is_active: true, email_verified_at: null,
+    created_at: "2026-01-01T00:00:00.000000Z", updated_at: "2026-01-01T00:00:00.000000Z",
+  },
+  badpermfieldsToken: "mock-sanctum-token-badpermfields",
+  badpermfieldsUser: {
+    id: 16, uuid: "3f6d0f62-4d9b-4f2a-9f3a-0demo0000017",
+    name: "Demo Badpermfields", email: "badpermfields@orbit.example", phone: null,
+    role: "owner", is_active: true, email_verified_at: null,
+    created_at: "2026-01-01T00:00:00.000000Z", updated_at: "2026-01-01T00:00:00.000000Z",
+  },
+  badidentityToken: "mock-sanctum-token-badidentity",
+  badidentityUser: {
+    id: 17, uuid: "3f6d0f62-4d9b-4f2a-9f3a-0demo0000018",
+    name: "Demo Badidentity", email: "badidentity@orbit.example", phone: null,
+    role: "owner", is_active: true, email_verified_at: null,
+    created_at: "2026-01-01T00:00:00.000000Z", updated_at: "2026-01-01T00:00:00.000000Z",
+  },
+  badempstatusToken: "mock-sanctum-token-badempstatus",
+  badempstatusUser: {
+    id: 18, uuid: "3f6d0f62-4d9b-4f2a-9f3a-0demo0000019",
+    name: "Demo Badempstatus", email: "badempstatus@orbit.example", phone: null,
+    role: "owner", is_active: true, email_verified_at: null,
+    created_at: "2026-01-01T00:00:00.000000Z", updated_at: "2026-01-01T00:00:00.000000Z",
+  },
 };
 
 const EXTRA_TOKENS = {
@@ -165,6 +220,12 @@ const EXTRA_TOKENS = {
   [DEMO.baddeptToken]: DEMO.baddeptUser,
   [DEMO.badleaveToken]: DEMO.badleaveUser,
   [DEMO.badpermToken]: DEMO.badpermUser,
+  [DEMO.badempfieldsToken]: DEMO.badempfieldsUser,
+  [DEMO.baddeptfieldsToken]: DEMO.baddeptfieldsUser,
+  [DEMO.badleavefieldsToken]: DEMO.badleavefieldsUser,
+  [DEMO.badpermfieldsToken]: DEMO.badpermfieldsUser,
+  [DEMO.badidentityToken]: DEMO.badidentityUser,
+  [DEMO.badempstatusToken]: DEMO.badempstatusUser,
 };
 
 /* Phase 2 fixtures: fictional demo data matching the verified resource
@@ -301,6 +362,12 @@ const server = createServer((req, res) => {
         "baddept@orbit.example": [DEMO.baddeptToken, DEMO.baddeptUser],
         "badleave@orbit.example": [DEMO.badleaveToken, DEMO.badleaveUser],
         "badperm@orbit.example": [DEMO.badpermToken, DEMO.badpermUser],
+        "badempfields@orbit.example": [DEMO.badempfieldsToken, DEMO.badempfieldsUser],
+        "baddeptfields@orbit.example": [DEMO.baddeptfieldsToken, DEMO.baddeptfieldsUser],
+        "badleavefields@orbit.example": [DEMO.badleavefieldsToken, DEMO.badleavefieldsUser],
+        "badpermfields@orbit.example": [DEMO.badpermfieldsToken, DEMO.badpermfieldsUser],
+        "badidentity@orbit.example": [DEMO.badidentityToken, DEMO.badidentityUser],
+        "badempstatus@orbit.example": [DEMO.badempstatusToken, DEMO.badempstatusUser],
       };
       if (body.email in extraByEmail && body.password === DEMO.password) {
         revoked = false;
@@ -356,6 +423,14 @@ const server = createServer((req, res) => {
     if (token === DEMO.malformedToken) {
       return send(res, 200, { message: "ok", unexpected: true });
     }
+    if (token === DEMO.badidentityToken) {
+      // Envelope is well-formed but identity fields have wrong types:
+      // the guard must fail closed instead of letting this reach React.
+      return send(res, 200, {
+        user: { ...DEMO.badidentityUser, name: { broken: true }, email: ["not-a-string"] },
+        company: DEMO.company,
+      });
+    }
     const user = token === DEMO.token ? DEMO.user : token === DEMO.employeeToken ? DEMO.employeeUser : token === DEMO.dashfailToken ? DEMO.dashfailUser : EXTRA_TOKENS[token];
     return send(res, 200, { user, company: DEMO.company });
   }
@@ -384,6 +459,59 @@ const server = createServer((req, res) => {
     }
     if (token === DEMO.badpermToken && url.pathname === "/api/v1/permission-requests") {
       return send(res, 200, { data: [], meta: { total: -3 } });
+    }
+    // Object-shaped but field-invalid records: the envelope is a proper
+    // array, yet record contents violate the verified contract.
+    if (token === DEMO.badempfieldsToken && url.pathname === "/api/v1/employees") {
+      return send(res, 200, {
+        data: [{ id: 91, uuid: "emp-bad-0001", first_name: "Bad", last_name: "Record" }],
+      });
+    }
+    if (token === DEMO.badempstatusToken && url.pathname === "/api/v1/employees") {
+      // Well-formed record except an employment_status outside the verified
+      // enum: it must not be counted in any total or bucket.
+      return send(res, 200, {
+        data: [
+          ...FIXTURES.employees,
+          {
+            id: 92, uuid: "emp-bad-0002", employee_number: "EMP-902",
+            first_name: "Bad", last_name: "Status", email: "badstatus@orbit.example",
+            employment_status: "astronaut", department_id: 1, job_title_id: 1, manager_id: null, user_id: null,
+          },
+        ],
+      });
+    }
+    if (token === DEMO.baddeptfieldsToken && url.pathname === "/api/v1/departments") {
+      return send(res, 200, {
+        data: [{ id: 91, uuid: "dep-bad-0001", name: "Bad Dept", description: null, is_active: "yes" }],
+      });
+    }
+    if (token === DEMO.badleavefieldsToken && url.pathname === "/api/v1/leave-requests") {
+      const badLeave = {
+        id: 91, uuid: "lr-bad-0001",
+        employee: { id: 2, first_name: { oops: 1 }, last_name: "Bad" },
+        leave_type: FIXTURES.leaveTypes[0],
+        start_date: "2026-06-01", end_date: "2026-06-02",
+        deducted_leave_days: "three", status: "bogus-status",
+        created_at: "2026-05-30T09:00:00.000000Z",
+      };
+      const missingDateLeave = {
+        id: 92, uuid: "lr-bad-0002",
+        employee: { id: 2, first_name: "Demo", last_name: "Employee" },
+        leave_type: FIXTURES.leaveTypes[0],
+        end_date: "2026-06-02",
+        deducted_leave_days: 1, status: "approved",
+        created_at: "2026-05-30T09:00:00.000000Z",
+      };
+      return send(res, 200, paginated([...LEAVE_REQUESTS, badLeave, missingDateLeave], url));
+    }
+    if (token === DEMO.badpermfieldsToken && url.pathname === "/api/v1/permission-requests") {
+      const badPerm = {
+        id: 91, uuid: "pr-bad-0001",
+        employee: { id: 2, first_name: "Demo", last_name: "Employee" },
+        date: 20260618, status: "approved", created_at: "not-a-date",
+      };
+      return send(res, 200, paginated([...PERMISSION_REQUESTS, badPerm], url));
     }
     if (token === DEMO.dashfailToken) {
       // Simulated per-widget failure: three reads fail, departments is empty.

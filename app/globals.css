@@ -26,6 +26,8 @@
   --color-danger-surface: var(--danger-surface);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-cairo-stack: var(--font-cairo), var(--font-inter), ui-sans-serif,
+    system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
 }
 
 :root {
@@ -66,4 +68,39 @@
 
 body {
   min-height: 100dvh;
+}
+
+/* Arabic renders in Cairo; Latin strings (emails, codes) stay readable
+   through the Inter fallback in the same stack. */
+html[lang="ar"] body {
+  font-family: var(--font-cairo-stack);
+}
+
+/* Mobile drawer entrance, direction-aware. */
+@keyframes drawer-in-ltr {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes drawer-in-rtl {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+html[dir="ltr"] .drawer-panel {
+  animation: drawer-in-ltr 200ms ease-out;
+}
+html[dir="rtl"] .drawer-panel {
+  animation: drawer-in-rtl 200ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-panel {
+    animation: none;
+  }
 }

@@ -1,10 +1,9 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { fetchMe } from "@/lib/server/api";
-import { SESSION_COOKIE } from "@/lib/server/session";
+import { requireSession } from "@/lib/server/guard";
 import { AppShell } from "@/components/shell/app-shell";
 import { ClearSession } from "@/components/clear-session";
 import { Alert } from "@/components/ui/alert";
+import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -21,36 +20,26 @@ export default async function ProtectedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!token) redirect("/login");
-
-  let me;
-  try {
-    me = await fetchMe(token);
-  } catch {
-    me = { ok: false as const, status: null, data: null, retryAfter: null };
-  }
-
-  if (me.status === 401) {
+  // The same shape-validated guard the pages use: a malformed identity can
+  // never reach AppShell and crash its render.
+  const session = await requireSession();
+  if (!session.ok && session.reason === "no-token") redirect("/login");
+  if (!session.ok && session.reason === "expired") {
     return <ClearSession notice="expired" />;
   }
-  if (me.status === 403) {
+  if (!session.ok && session.reason === "inactive") {
     return <ClearSession notice="inactive" />;
   }
-  if (!me.ok || !me.data?.user) {
+  if (!session.ok) {
+    const { t } = await getI18n();
     return (
       <main className="flex min-h-dvh items-center justify-center bg-background px-6">
         <div className="w-full max-w-md">
-          <Alert message="The service is unavailable right now. Please try again later." />
+          <Alert message={t("dashboard.serviceUnavailable")} />
         </div>
       </main>
     );
   }
 
-  const { user, company } = me.data;
-  if (user.is_active === false || company?.is_active === false) {
-    return <ClearSession notice="inactive" />;
-  }
-
-  return <AppShell user={user} company={company}>{children}</AppShell>;
+  return <AppShell user={session.user} company={session.company}>{children}</AppShell>;
 }

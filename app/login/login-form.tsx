@@ -5,32 +5,40 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
+import { useI18n } from "@/lib/i18n/client";
 
 type FieldErrors = Record<string, string[]>;
 
-const NOTICE_TEXT: Record<string, string> = {
-  expired: "Your session has expired. Please sign in again.",
-  inactive: "Your account or company is inactive. Please contact your administrator.",
-  unavailable: "The authentication service is unavailable. Please try again later.",
-  "logout-unconfirmed":
-    "Signed out on this device, but the server could not confirm token revocation.",
+/**
+ * Session notices are keyed by code and rendered from the active
+ * dictionary. Unknown codes collapse to the expired notice.
+ */
+const NOTICE_KEYS: Record<string, string> = {
+  expired: "auth.noticeExpired",
+  inactive: "auth.noticeInactive",
+  unavailable: "auth.noticeUnavailable",
+  "logout-unconfirmed": "auth.noticeLogoutUnconfirmed",
 };
 
 export function LoginForm({ notice }: { notice: string | null }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<string | null>(
-    notice ? (NOTICE_TEXT[notice] ?? NOTICE_TEXT.expired) : null,
+  // State stores dictionary KEYS, never translated strings: a locale switch
+  // keeps this client state across router.refresh(), and every message is
+  // re-translated at render in the active language.
+  const [fieldErrorKeys, setFieldErrorKeys] = useState<FieldErrors>({});
+  const [formErrorKey, setFormErrorKey] = useState<string | null>(
+    notice ? (NOTICE_KEYS[notice] ?? NOTICE_KEYS.expired) : null,
   );
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setFieldErrors({});
-    setFormError(null);
+    setFieldErrorKeys({});
+    setFormErrorKey(null);
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
@@ -41,6 +49,7 @@ export function LoginForm({ notice }: { notice: string | null }) {
       });
       const data = (await res.json().catch(() => null)) as {
         message?: string;
+        code?: string;
         errors?: FieldErrors;
       } | null;
 
@@ -50,18 +59,35 @@ export function LoginForm({ notice }: { notice: string | null }) {
         return;
       }
 
-      if (res.status === 422 && data?.errors) {
-        setFieldErrors(data.errors);
-        setFormError(data.message ?? "Please review the highlighted fields.");
+      // Messages are chosen by status/code from the active dictionary.
+      // Server text is never rendered, so raw backend errors cannot reach
+      // the user in either language.
+      if (res.status === 422) {
+        const fields: FieldErrors = {};
+        if (data?.errors && typeof data.errors === "object") {
+          for (const field of ["email", "password"] as const) {
+            if (Array.isArray(data.errors[field]) && data.errors[field].length > 0) {
+              fields[field] = ["auth.errorFieldInvalid"];
+            }
+          }
+        }
+        setFieldErrorKeys(fields);
+        setFormErrorKey("auth.errorReview");
+      } else if (res.status === 403) {
+        setFormErrorKey(
+          data?.code === "USER_INACTIVE" || data?.code === "COMPANY_INACTIVE"
+            ? "auth.noticeInactive"
+            : "auth.errorAccessDenied",
+        );
       } else if (res.status === 429) {
-        setFormError("Too many attempts. Please wait a moment and try again.");
+        setFormErrorKey("auth.errorRateLimited");
       } else if (res.status === 502) {
-        setFormError("The authentication service is unavailable. Please try again later.");
+        setFormErrorKey("auth.errorUnavailable");
       } else {
-        setFormError(data?.message ?? "Sign in failed. Please try again.");
+        setFormErrorKey("auth.errorFailed");
       }
     } catch {
-      setFormError("Network error. Check your connection and try again.");
+      setFormErrorKey("auth.errorNetwork");
     } finally {
       setLoading(false);
     }
@@ -69,47 +95,49 @@ export function LoginForm({ notice }: { notice: string | null }) {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
-      {formError && <Alert message={formError} />}
+      {formErrorKey && <Alert message={t(formErrorKey)} />}
 
       <Input
-        label="Work email"
+        label={t("auth.workEmail")}
         name="email"
         type="email"
         autoComplete="email"
         required
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        error={fieldErrors.email?.[0]}
+        error={fieldErrorKeys.email?.[0] ? t(fieldErrorKeys.email[0]) : undefined}
         placeholder="name@company.com"
+        dir="ltr"
+        className="text-start"
       />
 
       <div className="flex flex-col gap-1.5">
         <div className="relative">
           <Input
-            label="Password"
+            label={t("auth.password")}
             name="password"
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            error={fieldErrors.password?.[0]}
-            placeholder="Your password"
-            className="pr-16"
+            error={fieldErrorKeys.password?.[0] ? t(fieldErrorKeys.password[0]) : undefined}
+            placeholder={t("auth.passwordPlaceholder")}
+            className="pe-16"
           />
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
             aria-pressed={showPassword}
-            className="absolute bottom-2.5 right-3 text-xs font-semibold text-brand-strong hover:text-brand-accent dark:hover:text-brand-support focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
+            className="absolute end-3 bottom-2.5 text-xs font-semibold text-brand-strong hover:text-brand-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent dark:hover:text-brand-support"
           >
-            {showPassword ? "Hide" : "Show"}
+            {showPassword ? t("common.hide") : t("common.show")}
           </button>
         </div>
       </div>
 
       <Button type="submit" loading={loading} className="w-full">
-        Sign in
+        {t("auth.signIn")}
       </Button>
     </form>
   );

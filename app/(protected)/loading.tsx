@@ -1,11 +1,21 @@
+import { getI18n } from "@/lib/i18n/server";
+
 /**
  * Loading fallback for protected pages (shown while the server validates
  * the session and fetches dashboard data). Pure skeleton, no fake data.
  */
-export default function Loading() {
+export default async function Loading() {
+  const { t } = await getI18n();
   return (
-    <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8" aria-busy="true" aria-label="Loading dashboard">
-      <div className="mx-auto flex w-full max-w-6xl animate-pulse flex-col gap-6" data-testid="dashboard-loading">
+    <main
+      className="flex-1 px-4 py-6 sm:px-6 lg:px-8"
+      aria-busy="true"
+      aria-label={t("dashboard.loading")}
+    >
+      <div
+        className="mx-auto flex w-full max-w-6xl animate-pulse flex-col gap-6"
+        data-testid="dashboard-loading"
+      >
         <div className="space-y-2">
           <div className="h-7 w-56 rounded-lg bg-surface-muted" />
           <div className="h-4 w-72 rounded-lg bg-surface-muted" />

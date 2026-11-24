@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/alert";
+import { useI18n } from "@/lib/i18n/client";
 
 /**
  * Clears a stale or revoked session cookie through the logout route, then
@@ -13,6 +14,7 @@ import { Alert } from "@/components/ui/alert";
  * itself, so a failed sign-out can never cause a redirect loop.
  */
 export function ClearSession({ notice = "expired" }: { notice?: string }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -54,7 +56,7 @@ export function ClearSession({ notice = "expired" }: { notice?: string }) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-6">
         <div className="w-full max-w-md">
-          <Alert message="Your session could not be cleared automatically. Please try again." />
+          <Alert message={t("auth.clearFailed")} />
         </div>
         <button
           type="button"
@@ -64,7 +66,7 @@ export function ClearSession({ notice = "expired" }: { notice?: string }) {
           }}
           className="text-sm font-semibold text-brand-strong hover:text-brand-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
         >
-          Try again
+          {t("common.tryAgain")}
         </button>
       </main>
     );
@@ -72,7 +74,7 @@ export function ClearSession({ notice = "expired" }: { notice?: string }) {
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-6">
-      <p className="text-sm text-foreground-muted">Signing you out…</p>
+      <p className="text-sm text-foreground-muted">{t("auth.signingOut")}</p>
     </main>
   );
 }

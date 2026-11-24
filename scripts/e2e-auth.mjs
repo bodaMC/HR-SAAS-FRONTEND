@@ -146,7 +146,8 @@ try {
   await login('demo@orbit.example', 'wrong-password');
   await alertEl().waitFor();
   check('422 shows app-owned form message', /review the highlighted fields/i.test(await alertText() ?? ''));
-  check('422 shows field-level credentials error', /credentials do not match/i.test((await page.textContent('body')) ?? ''));
+  check('422 shows generic localized field error', /review this field/i.test((await page.textContent('body')) ?? ''));
+  check('422 never renders backend error text', !/credentials do not match/i.test((await page.textContent('body')) ?? ''));
 
   // 3. 429 rate limit surfaced
   await login('limited@orbit.example', 'orbit-demo-password');
