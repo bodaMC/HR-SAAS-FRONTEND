@@ -6,7 +6,16 @@ import "server-only";
  * components). The base URL is a server-only environment variable, never
  * exposed to the browser, and bearer tokens are never returned to clients.
  */
-import type { LoginSuccess, MeResponse } from "@/lib/types";
+import type {
+  ApiDepartment,
+  ApiEmployee,
+  ApiLeaveRequest,
+  ApiPermissionRequest,
+  Collection,
+  LoginSuccess,
+  MeResponse,
+  Paginated,
+} from "@/lib/types";
 
 function baseUrl(): string {
   const base = process.env.ORBIT_API_BASE_URL;
@@ -69,6 +78,36 @@ export function logoutRemote(
 ): Promise<ApiResult<{ message: string }>> {
   return request<{ message: string }>("/auth/logout", {
     method: "POST",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+export function fetchDepartments(token: string): Promise<ApiResult<Collection<ApiDepartment>>> {
+  return request<Collection<ApiDepartment>>("/departments", {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+export function fetchEmployees(token: string): Promise<ApiResult<Collection<ApiEmployee>>> {
+  return request<Collection<ApiEmployee>>("/employees", {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+export function fetchLeaveRequests(
+  token: string,
+  query = "",
+): Promise<ApiResult<Paginated<ApiLeaveRequest>>> {
+  return request<Paginated<ApiLeaveRequest>>(`/leave-requests${query}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+export function fetchPermissionRequests(
+  token: string,
+  query = "",
+): Promise<ApiResult<Paginated<ApiPermissionRequest>>> {
+  return request<Paginated<ApiPermissionRequest>>(`/permission-requests${query}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
 }

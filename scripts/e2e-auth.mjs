@@ -30,11 +30,13 @@
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 const BASE = process.env.APP_BASE_URL ?? 'http://127.0.0.1:3000';
 const MOCK = process.env.MOCK_BASE_URL ?? 'http://127.0.0.1:4100';
 const READY_TRIES = Number(process.env.E2E_READY_TRIES ?? 60);
-const SHOTS = new URL('../e2e-screenshots/', import.meta.url).pathname;
+const SHOTS = fileURLToPath(new URL('../e2e-screenshots/', import.meta.url));
 mkdirSync(SHOTS, { recursive: true });
 
 const children = [];
@@ -49,7 +51,7 @@ const spawnBg = (args, env = {}) => {
   const cleanEnv = { ...process.env };
   delete cleanEnv.ORBIT_APP_ORIGIN;
   delete cleanEnv.ORBIT_ALLOW_INSECURE_LOCAL_ORIGIN;
-  const c = spawn('node', args, { stdio: 'ignore', env: { ...cleanEnv, ...env } });
+  const c = spawn(process.execPath, args, { stdio: 'ignore', env: { ...cleanEnv, ...env } });
   children.push(c);
   return c;
 };
@@ -70,9 +72,11 @@ const assertPortFree = async (url, label) => {
   }
 };
 
-const repoRoot = new URL('..', import.meta.url).pathname;
-const nextBin = `${repoRoot}node_modules/.bin/next`;
-const mockScript = new URL('./mock-backend.mjs', import.meta.url).pathname;
+// Portable paths and the portable Next CLI entry: works on Windows too
+// (.bin shims and URL.pathname forms do not).
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const nextBin = path.join(repoRoot, 'node_modules', 'next', 'dist', 'bin', 'next');
+const mockScript = fileURLToPath(new URL('./mock-backend.mjs', import.meta.url));
 
 let browser;
 try {
@@ -102,13 +106,25 @@ try {
   // Exclude Next.js' visually-hidden route announcer (role=alert with page title).
   const alertEl = () => page.locator('div[role="alert"]:not(#__next-route-announcer__)').filter({ hasText: /\S/ }).first();
   const alertText = () => alertEl().textContent().catch(() => '');
+  // Fills and submits the login form, then returns: callers assert the
+  // outcome (navigation on success, error alert on rejection). Hydration
+  // right after load can swallow the fill, so values are verified and the
+  // submit is retried only when the fields lost their content.
   const login = async (email, pw) => {
     await ctx.clearCookies();
     await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' });
-    await page.getByLabel('Work email').waitFor();
-    await page.getByLabel('Work email').fill(email);
-    await page.getByLabel('Password', { exact: true }).fill(pw);
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    const emailEl = page.getByLabel('Work email');
+    const pwEl = page.getByLabel('Password', { exact: true });
+    const submit = page.getByRole('button', { name: 'Sign in' });
+    await emailEl.waitFor();
+    await page.waitForLoadState('networkidle');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await emailEl.fill(email);
+      await pwEl.fill(pw);
+      if ((await emailEl.inputValue()) === email) break;
+      await page.waitForTimeout(250);
+    }
+    await submit.click();
   };
 
   // 1. Protected root redirects when unauthenticated
@@ -253,7 +269,14 @@ try {
     await page.unroute('**/api/auth/logout').catch(() => {});
     await page.route('**/api/auth/logout', handler);
   };
-  const clickSignOut = async () => page.getByRole('button', { name: 'Sign out' }).click();
+  const clickSignOut = async () => {
+    const menuBtn = page.getByRole('button', { name: 'User menu' });
+    // The menu may still be open from a previous failed attempt: only open
+    // it when closed, never toggle blindly.
+    if ((await menuBtn.getAttribute('aria-expanded')) !== 'true') await menuBtn.click();
+    await page.getByTestId('user-menu').waitFor({ state: 'visible', timeout: 10000 });
+    await page.getByRole('button', { name: 'Sign out' }).click();
+  };
   const expectSignOutError = async (label) => {
     await clickSignOut();
     await alertEl().waitFor();
