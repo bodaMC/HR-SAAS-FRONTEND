@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { fetchDepartments, fetchEmployees, fetchJobTitles } from "@/lib/server/api";
+import { can } from "@/lib/access";
+import { emptyCollection } from "@/lib/server/empty";
 import { requireSession } from "@/lib/server/guard";
 import {
   validCollection,
@@ -31,7 +33,7 @@ export default async function NewEmployeePage() {
     );
   }
 
-  const canManage = session.user.role === "owner" || session.user.role === "admin";
+  const canManage = can(session.caps, "employees.create");
   if (!canManage) {
     return (
       <div className="mx-auto w-full max-w-2xl">
@@ -41,8 +43,8 @@ export default async function NewEmployeePage() {
   }
 
   const [departments, jobTitles, employees] = await Promise.all([
-    fetchDepartments(session.token),
-    fetchJobTitles(session.token),
+    can(session.caps, "departments.view") ? fetchDepartments(session.token) : Promise.resolve(emptyCollection<ApiDepartment>()),
+    can(session.caps, "job_titles.view") ? fetchJobTitles(session.token) : Promise.resolve(emptyCollection<ApiJobTitle>()),
     fetchEmployees(session.token),
   ]);
   const deps = validCollection<ApiDepartment>(departments, validDepartmentRecord);

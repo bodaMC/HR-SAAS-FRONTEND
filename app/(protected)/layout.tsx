@@ -41,5 +41,5 @@ export default async function ProtectedLayout({
     );
   }
 
-  return <AppShell user={session.user} company={session.company}>{children}</AppShell>;
+  return <AppShell user={session.user} company={session.company} caps={session.caps}>{children}</AppShell>;
 }

@@ -20,12 +20,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { ChevronRight, Lock, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { UserMenu } from "@/components/shell/user-menu";
-import { sectionsForRole } from "@/lib/nav";
+import { navForUser } from "@/lib/nav";
+import type { Capabilities } from "@/lib/access";
 import { useI18n } from "@/lib/i18n/client";
 import type { ApiCompany, ApiUser } from "@/lib/types";
 
@@ -66,12 +67,14 @@ function SidebarTooltip({ tooltip, dir }: { tooltip: TooltipState; dir: "ltr" | 
 
 function SidebarContent({
   role,
+  caps,
   collapsed,
   onNavigate,
   showTooltip,
   hideTooltip,
 }: {
   role: string;
+  caps: Capabilities;
   collapsed: boolean;
   onNavigate?: () => void;
   showTooltip: (e: React.SyntheticEvent<HTMLElement>, text: string) => void;
@@ -85,7 +88,7 @@ function SidebarContent({
       aria-label={t("nav.main")}
       className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4"
     >
-      {sectionsForRole(role).map((section, sectionIndex) => (
+      {navForUser(role, caps).map((section, sectionIndex) => (
         <div key={section.labelKey}>
           {sectionIndex > 0 && collapsed && (
             <hr className="mx-2 my-3 border-white/10" aria-hidden="true" />
@@ -111,13 +114,46 @@ function SidebarContent({
                   ? pathname === "/"
                   : pathname === item.href || pathname.startsWith(`${item.href}/`));
 
-              if (item.status !== "active" || !item.href) {
+              if (item.state === "restricted") {
+                const lockedLabel = t("nav.restricted");
+                const meaning = t("nav.restrictedMeaning");
+                return (
+                  <li key={item.labelKey}>
+                    <span
+                      data-nav-state="restricted"
+                      data-testid={`nav-restricted-${item.labelKey}`}
+                      aria-disabled="true"
+                      aria-label={collapsed ? `${label} (${lockedLabel})` : undefined}
+                      title={collapsed ? undefined : `${label} - ${meaning}`}
+                      onMouseEnter={
+                        collapsed ? (e) => showTooltip(e, `${label} · ${meaning}`) : undefined
+                      }
+                      onMouseLeave={collapsed ? hideTooltip : undefined}
+                      onFocus={collapsed ? (e) => showTooltip(e, `${label} · ${meaning}`) : undefined}
+                      onBlur={collapsed ? hideTooltip : undefined}
+                      tabIndex={collapsed ? 0 : undefined}
+                      className={`flex min-h-11 cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/40 ${
+                        collapsed ? "justify-center px-0" : ""
+                      }`}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                      {!collapsed && <span className="min-w-0 flex-1 break-words leading-snug">{label}</span>}
+                      {!collapsed && <Lock className="h-4 w-4 shrink-0 text-white/50" aria-hidden="true" data-testid="nav-lock-icon" />}
+                      {!collapsed && <span className="sr-only">{`${lockedLabel}. ${meaning}`}</span>}
+                      {collapsed && <Lock className="absolute h-3 w-3 translate-x-3 translate-y-3 text-white/70" aria-hidden="true" />}
+                    </span>
+                  </li>
+                );
+              }
+
+              if (item.state !== "enabled" || !item.href) {
                 const meaning = t(
-                  item.status === "roadmap" ? "nav.roadmapMeaning" : "nav.plannedMeaning",
+                  item.state === "roadmap" ? "nav.roadmapMeaning" : "nav.plannedMeaning",
                 );
                 return (
                   <li key={item.labelKey}>
                     <span
+                      data-nav-state={item.state}
                       aria-disabled="true"
                       aria-label={collapsed ? `${label} (${badge})` : undefined}
                       title={collapsed ? undefined : `${label} - ${meaning}`}
@@ -187,6 +223,7 @@ const BREADCRUMB_KEYS: Record<string, string> = {
   employees: "nav.items.employees",
   departments: "nav.items.departments",
   "job-titles": "nav.items.jobTitles",
+  access: "nav.items.rolesPermissions",
   new: "breadcrumb.new",
   edit: "breadcrumb.edit",
 };
@@ -241,10 +278,12 @@ function SidebarBrand({
 export function AppShell({
   user,
   company,
+  caps,
   children,
 }: {
   user: ApiUser;
   company: ApiCompany | null;
+  caps: Capabilities;
   children: React.ReactNode;
 }) {
   const { t, dir } = useI18n();
@@ -360,6 +399,7 @@ export function AppShell({
         <SidebarBrand collapsed={effectiveCollapsed} tenantName={company?.name ?? null} />
         <SidebarContent
           role={user.role}
+          caps={caps}
           collapsed={effectiveCollapsed}
           showTooltip={showTooltip}
           hideTooltip={hideTooltip}
@@ -384,7 +424,7 @@ export function AppShell({
           </button>
         </div>
         <div className="border-t border-white/10 p-3">
-          <UserMenu user={user} collapsed={effectiveCollapsed} />
+          <UserMenu user={user} collapsed={effectiveCollapsed} caps={caps} />
         </div>
       </aside>
       {effectiveCollapsed && tooltip && <SidebarTooltip tooltip={tooltip} dir={dir} />}
@@ -428,13 +468,14 @@ export function AppShell({
             </div>
             <SidebarContent
               role={user.role}
+            caps={caps}
               collapsed={false}
               onNavigate={() => setDrawerOpen(false)}
               showTooltip={showTooltip}
               hideTooltip={hideTooltip}
             />
             <div className="border-t border-white/10 p-3">
-              <UserMenu user={user} collapsed={false} />
+              <UserMenu user={user} collapsed={false} caps={caps} />
             </div>
           </div>
         </div>

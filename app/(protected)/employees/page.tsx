@@ -1,4 +1,7 @@
 import { redirect } from "next/navigation";
+import { can } from "@/lib/access";
+import { RestrictedPage } from "@/components/restricted-page";
+import { emptyCollection } from "@/lib/server/empty";
 import Link from "next/link";
 import { fetchDepartments, fetchEmployees, fetchJobTitles } from "@/lib/server/api";
 import { requireSession } from "@/lib/server/guard";
@@ -45,6 +48,9 @@ export default async function EmployeesPage({
     );
   }
 
+  if (!can(session.caps, "employees.view")) {
+    return <RestrictedPage title={t("access.restricted.title")} body={t("access.restricted.body")} />;
+  }
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
   const search = one(sp.search).slice(0, 200);
@@ -63,13 +69,14 @@ export default async function EmployeesPage({
   if (status) qs.set("employment_status", status);
   const query = qs.size > 0 ? `?${qs.toString()}` : "";
 
-  const canManage = session.user.role === "owner" || session.user.role === "admin";
+  const canCreate = can(session.caps, "employees.create");
+  const canUpdate = can(session.caps, "employees.update");
   // The manager dropdown needs the unfiltered list; reuse the main response
   // when no filter is active instead of calling the API twice.
   const [employeesRes, departmentsRes, jobTitlesRes, allEmployeesRes] = await Promise.all([
     fetchEmployees(session.token, query),
-    fetchDepartments(session.token),
-    fetchJobTitles(session.token),
+    can(session.caps, "departments.view") ? fetchDepartments(session.token) : Promise.resolve(emptyCollection<ApiDepartment>()),
+    can(session.caps, "job_titles.view") ? fetchJobTitles(session.token) : Promise.resolve(emptyCollection<ApiJobTitle>()),
     query === "" ? Promise.resolve(null) : fetchEmployees(session.token),
   ]);
   const employees = validCollection<ApiEmployee>(employeesRes, validEmployeeRecord);
@@ -89,7 +96,7 @@ export default async function EmployeesPage({
     <div className="mx-auto w-full max-w-6xl min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-foreground">{t("employees.title")}</h1>
-        {canManage ? (
+        {canCreate ? (
           <Link
             href="/employees/new"
             className="inline-flex h-11 items-center justify-center rounded-lg bg-brand-primary px-5 text-sm font-semibold text-white hover:bg-brand-secondary"
@@ -158,7 +165,7 @@ export default async function EmployeesPage({
               </dl>
               <div className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-3">
                 <ActionIconLink kind="view" href={`/employees/${e.id}${fromParam}`} label={t("employees.view")} />
-                {canManage ? (
+                {canUpdate ? (
                   <ActionIconLink kind="edit" href={`/employees/${e.id}/edit`} label={t("employees.edit")} />
                 ) : null}
               </div>
@@ -207,7 +214,7 @@ export default async function EmployeesPage({
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <ActionIconLink kind="view" href={`/employees/${e.id}${fromParam}`} label={t("employees.view")} />
-                      {canManage ? (
+                      {canUpdate ? (
                         <ActionIconLink kind="edit" href={`/employees/${e.id}/edit`} label={t("employees.edit")} />
                       ) : null}
                     </div>

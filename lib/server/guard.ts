@@ -18,10 +18,11 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { fetchMe, type ApiResult } from "@/lib/server/api";
 import { SESSION_COOKIE } from "@/lib/server/session";
+import { parseAccess, type Capabilities } from "@/lib/access";
 import type { ApiCompany, ApiUser } from "@/lib/types";
 
 export type SessionGuard =
-  | { ok: true; token: string; user: ApiUser; company: ApiCompany | null }
+  | { ok: true; token: string; user: ApiUser; company: ApiCompany | null; caps: Capabilities }
   | { ok: false; reason: "no-token" | "expired" | "inactive" | "unavailable" };
 
 function isPlainRecord(v: unknown): v is Record<string, unknown> {
@@ -58,7 +59,7 @@ export const requireSession = cache(async function requireSessionUncached(): Pro
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return { ok: false, reason: "no-token" };
 
-  let me: ApiResult<{ user?: ApiUser | null; company?: ApiCompany | null }>;
+  let me: ApiResult<{ user?: ApiUser | null; company?: ApiCompany | null; access?: unknown }>;
   try {
     me = await fetchMe(token);
   } catch {
@@ -87,5 +88,5 @@ export const requireSession = cache(async function requireSessionUncached(): Pro
   if (user.is_active === false || company?.is_active === false) {
     return { ok: false, reason: "inactive" };
   }
-  return { ok: true, token, user, company };
+  return { ok: true, token, user, company, caps: parseAccess(me.data.access) };
 });

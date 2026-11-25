@@ -225,7 +225,79 @@ const DEMO = {
   },
 };
 
+/* Phase 3.2 personas (SIMULATED contract; real behavior is verified only against Laravel).
+ * The default demo owner models an Owner who has been bootstrapped as HR Administrator,
+ * so the Phase 3 management suites keep exercising the permitted paths. */
+const mkUser = (id, name, email, role) => ({
+  id, uuid: `3f6d0f62-4d9b-4f2a-9f3a-0demo00001${id}`, name, email, phone: null, role,
+  is_active: true, email_verified_at: null,
+  created_at: "2026-01-01T00:00:00.000000Z", updated_at: "2026-01-01T00:00:00.000000Z",
+});
+DEMO.hrToken = "mock-sanctum-token-hr";
+DEMO.hrUser = mkUser(20, "Demo HR", "hr@orbit.example", "employee");
+DEMO.plainownerToken = "mock-sanctum-token-plainowner";
+DEMO.plainownerUser = mkUser(21, "Demo Plain Owner", "plainowner@orbit.example", "owner");
+DEMO.viewonlyToken = "mock-sanctum-token-viewonly";
+DEMO.viewonlyUser = mkUser(22, "Demo View Only", "viewonly@orbit.example", "employee");
+DEMO.platformToken = "mock-sanctum-token-platform";
+DEMO.platformUser = mkUser(23, "Demo Platform Admin", "platform@orbit.example", "owner");
+DEMO.cronlyToken = "mock-sanctum-token-cronly";
+DEMO.cronlyUser = mkUser(25, "Demo Create Only", "cronly@orbit.example", "employee");
+DEMO.uponlyToken = "mock-sanctum-token-uponly";
+DEMO.uponlyUser = mkUser(26, "Demo Update Only", "uponly@orbit.example", "employee");
+DEMO.delonlyToken = "mock-sanctum-token-delonly";
+DEMO.delonlyUser = mkUser(27, "Demo Delete Only", "delonly@orbit.example", "employee");
+DEMO.plainadminToken = "mock-sanctum-token-plainadmin";
+DEMO.plainadminUser = mkUser(28, "Demo Plain Admin", "plainadmin@orbit.example", "admin");
+DEMO.sysadminToken = "mock-sanctum-token-sysadmin";
+DEMO.sysadminUser = mkUser(29, "Demo System Super Admin", "sysadmin@orbit.example", "employee");
+DEMO.noaccessToken = "mock-sanctum-token-noaccess";
+DEMO.noaccessUser = mkUser(24, "Demo No Access Block", "noaccess@orbit.example", "owner");
+
+const HR_PERMS = [
+  "employees.view", "employees.create", "employees.update", "employees.delete", "employees.view_personal_data",
+  "departments.view", "departments.create", "departments.update", "departments.delete",
+  "job_titles.view", "job_titles.create", "job_titles.update", "job_titles.delete",
+  "roles.view", "roles.create", "roles.update", "roles.delete", "roles.assign", "permissions.view", "permissions.manage",
+];
+// FINAL-V3: the legacy Owner/Admin account types hold NO implicit permission (no fallback).
+const PROTECTED_PERMS = ["audit_logs.view", "company_settings.manage", "work_schedules.manage"];
+const HR_DELEGATES = HR_PERMS.filter((p) => !["roles.create", "roles.update", "roles.delete", "roles.assign", "permissions.manage"].includes(p));
+function permsFor(token) {
+  if (token === DEMO.employeeToken || token === DEMO.managerToken || token === DEMO.unknownroleToken) return [];
+  if (token === DEMO.plainownerToken || token === DEMO.plainadminToken) return [];
+  if (token === DEMO.sysadminToken) return [...HR_PERMS, ...PROTECTED_PERMS].sort();
+  if (token === DEMO.viewonlyToken) return ["employees.view", "departments.view", "job_titles.view"];
+  if (token === DEMO.platformToken) return [];
+  if (token === DEMO.hrToken) return HR_PERMS;
+  if (token === DEMO.cronlyToken) return ["departments.view", "departments.create", "roles.view", "roles.create", "permissions.view"];
+  if (token === DEMO.uponlyToken) return ["departments.view", "departments.update", "roles.view", "roles.update", "permissions.view"];
+  if (token === DEMO.delonlyToken) return ["departments.view", "departments.delete", "roles.view", "roles.delete", "permissions.view"];
+  // The default demo owner models an Owner bootstrapped as HR Administrator: exactly the role's permissions (no implicit protected administration).
+  return HR_PERMS;
+}
+const can = (token, p) => permsFor(token).includes(p);
+const SSA_ROLE = { id: 3, key: "system_super_admin", name: "System Super Admin", name_ar: "مدير النظام الأعلى", is_system: true };
+const HR_ROLE = { id: 1, key: "hr_administrator", name: "HR Administrator", name_ar: "مسؤول الموارد البشرية", is_system: true };
+// SIMULATED: which RBAC roles /auth/me reports. HR-bootstrapped personas hold the HR role; custom-role personas hold a custom role; unbootstrapped owners and employees none.
+function meRoles(token) {
+  if (token === DEMO.hrToken || token === DEMO.token) return [HR_ROLE];
+  if (token === DEMO.sysadminToken) return [SSA_ROLE];
+  if ([DEMO.viewonlyToken, DEMO.cronlyToken, DEMO.uponlyToken, DEMO.delonlyToken].includes(token)) return [{ id: 2, key: "recruiter", name: "Recruiter", name_ar: null, is_system: false }];
+  return [];
+}
+
 const EXTRA_TOKENS = {
+  [DEMO.hrToken]: DEMO.hrUser,
+  [DEMO.plainownerToken]: DEMO.plainownerUser,
+  [DEMO.plainadminToken]: DEMO.plainadminUser,
+  [DEMO.sysadminToken]: DEMO.sysadminUser,
+  [DEMO.viewonlyToken]: DEMO.viewonlyUser,
+  [DEMO.platformToken]: DEMO.platformUser,
+  [DEMO.noaccessToken]: DEMO.noaccessUser,
+  [DEMO.cronlyToken]: DEMO.cronlyUser,
+  [DEMO.uponlyToken]: DEMO.uponlyUser,
+  [DEMO.delonlyToken]: DEMO.delonlyUser,
   [DEMO.managerToken]: DEMO.managerUser,
   [DEMO.forbiddenToken]: DEMO.forbiddenUser,
   [DEMO.brokensessionToken]: DEMO.brokensessionUser,
@@ -320,12 +392,26 @@ const PERMISSION_REQUESTS = [
  * Deletions are SOFT (deleted flag) mirroring the backend's SoftDeletes:
  * deleted rows vanish from lists and embedded relations resolve to null,
  * but FK ids stay on the record. All data is fictional. */
+const MOCK_HITS = [];
 const store = {
   departments: structuredClone(FIXTURES.departments),
   jobTitles: structuredClone(FIXTURES.jobTitles),
   employees: structuredClone(FIXTURES.employees),
+  roles: [
+    { id: 1, uuid: "role-uuid-1", key: "hr_administrator", name: "HR Administrator", name_ar: "مسؤول الموارد البشرية", description: "Manages employees, departments, job titles and tenant roles.", is_system: true, is_protected: false, permissions: HR_PERMS, users_count: 1 },
+    { id: 2, uuid: "role-uuid-2", key: "recruiter", name: "Recruiter", name_ar: null, description: "Views and creates employees.", is_system: false, is_protected: false, permissions: ["employees.view", "employees.create"], users_count: 0 },
+  ],
+  accessUsers: [
+    { id: 20, name: "Demo HR", email: "hr@orbit.example", is_active: true, legacy_role: "employee", roles: [{ id: 1, key: "hr_administrator", name: "HR Administrator", is_system: true }] },
+    { id: 2, name: "Demo Employee", email: "employee@orbit.example", is_active: true, legacy_role: "employee", roles: [] },
+    { id: 10, name: "Demo Manager", email: "manager@orbit.example", is_active: true, legacy_role: "manager", roles: [] },
+  ],
   deleted: { departments: new Set(), jobTitles: new Set(), employees: new Set() },
 };
+if (process.env.MOCK_LARGE_REGISTRY) { // SIMULATED stress data for Roles & Permissions usability/perf
+  for (let i = 0; i < 300; i++) store.accessUsers.push({ id: 1000 + i, name: `Bulk User ${i}`, email: `bulk${i}@orbit.example`, is_active: true, legacy_role: "employee", roles: [] });
+  for (let i = 0; i < 60; i++) store.roles.push({ id: 100 + i, uuid: `role-uuid-${100 + i}`, key: `custom_bulk_${i}`, name: `Bulk Role ${i}`, name_ar: null, description: null, is_system: false, is_protected: false, permissions: ["employees.view"], users_count: 0 });
+}
 
 function embedEmployee(emp, token) {
   const dep = store.departments.find((d) => d.id === emp.department_id && !store.deleted.departments.has(d.id));
@@ -345,7 +431,7 @@ function embedEmployee(emp, token) {
    * every record; an employee sees only their own record's; a manager
    * sees only records in their management hierarchy (the demo manager
    * manages nobody, so nothing extra). */
-  const isPrivileged = token !== DEMO.employeeToken && token !== DEMO.managerToken && token !== DEMO.unknownroleToken;
+  const isPrivileged = can(token, "employees.view_personal_data");
   const isSelf = emp.user_id === 2 && token === DEMO.employeeToken;
   if (!isPrivileged && !isSelf) {
     delete out.phone;
@@ -554,6 +640,16 @@ const server = createServer((req, res) => {
         return send(res, 429, { message: "Too many login attempts." }, { "Retry-After": "60" });
       }
       const extraByEmail = {
+        "hr@orbit.example": [DEMO.hrToken, DEMO.hrUser],
+        "plainowner@orbit.example": [DEMO.plainownerToken, DEMO.plainownerUser],
+        "plainadmin@orbit.example": [DEMO.plainadminToken, DEMO.plainadminUser],
+        "sysadmin@orbit.example": [DEMO.sysadminToken, DEMO.sysadminUser],
+        "viewonly@orbit.example": [DEMO.viewonlyToken, DEMO.viewonlyUser],
+        "platform@orbit.example": [DEMO.platformToken, DEMO.platformUser],
+        "noaccess@orbit.example": [DEMO.noaccessToken, DEMO.noaccessUser],
+        "cronly@orbit.example": [DEMO.cronlyToken, DEMO.cronlyUser],
+        "uponly@orbit.example": [DEMO.uponlyToken, DEMO.uponlyUser],
+        "delonly@orbit.example": [DEMO.delonlyToken, DEMO.delonlyUser],
         "employee@orbit.example": [DEMO.employeeToken, DEMO.employeeUser],
         "manager@orbit.example": [DEMO.managerToken, DEMO.managerUser],
         "dashfail@orbit.example": [DEMO.dashfailToken, DEMO.dashfailUser],
@@ -636,7 +732,91 @@ const server = createServer((req, res) => {
       });
     }
     const user = token === DEMO.token ? DEMO.user : token === DEMO.employeeToken ? DEMO.employeeUser : token === DEMO.dashfailToken ? DEMO.dashfailUser : EXTRA_TOKENS[token];
-    return send(res, 200, { user, company: DEMO.company });
+    if (token === DEMO.noaccessToken) {
+      // Older/malformed backend: no access block at all. The app must fail closed (zero permissions).
+      return send(res, 200, { user, company: DEMO.company });
+    }
+    return send(res, 200, {
+      user,
+      company: DEMO.company,
+      access: { permissions: permsFor(token), roles: meRoles(token), is_platform_admin: token === DEMO.platformToken },
+    });
+  }
+  /* Phase 3.2 access administration (simulated). */
+  if (url.pathname.startsWith("/api/v1/access/")) {
+    if (!isKnownToken(token) || revoked) return send(res, 401, { message: "Unauthenticated." });
+    const route = url.pathname.slice("/api/v1/access".length);
+    const deny = (status, code) => send(res, status, { message: code, code });
+    if (route === "/permissions" && req.method === "GET") {
+      if (!can(token, "permissions.view") && !can(token, "roles.view")) return deny(403, "forbidden");
+      const LARGE = process.env.MOCK_LARGE_REGISTRY ? Number(process.env.MOCK_LARGE_REGISTRY) : 0; // SIMULATED stress registry (usability/perf only)
+      const groups = { employees: HR_PERMS.filter((x) => x.startsWith("employees.")), departments: HR_PERMS.filter((x) => x.startsWith("departments.")), job_titles: HR_PERMS.filter((x) => x.startsWith("job_titles.")), roles: HR_PERMS.filter((x) => x.startsWith("roles.") || x.startsWith("permissions.")) };
+      if (LARGE) for (const key of Object.keys(groups)) for (let i = 0; i < LARGE; i++) groups[key] = [...groups[key], `${key}.bulk_${String(i).padStart(3, "0")}`];
+      return send(res, 200, { data: {
+        groups: Object.entries(groups).map(([key, perms]) => ({ key, permissions: perms.map((code) => ({ code, grantable_by_you: HR_DELEGATES.includes(code) || /\.bulk_/.test(code) })) })),
+        protected: PROTECTED_PERMS, reserved: ["payroll.view"], your_permissions: permsFor(token),
+      } });
+    }
+    if (route === "/roles" && req.method === "GET") {
+      if (!can(token, "roles.view")) return deny(403, "forbidden");
+      return send(res, 200, { data: store.roles });
+    }
+    if (route === "/users" && req.method === "GET") {
+      if (!can(token, "roles.view") && !can(token, "roles.assign")) return deny(403, "forbidden");
+      const q = (url.searchParams.get("search") ?? "").trim().toLowerCase();
+      const perPage = Math.min(100, Math.max(1, Number(url.searchParams.get("per_page") ?? 25)));
+      const all = store.accessUsers.filter((u) => !q || `${u.name} ${u.email}`.toLowerCase().includes(q));
+      const last = Math.max(1, Math.ceil(all.length / perPage));
+      const page = Math.min(Math.max(1, Number(url.searchParams.get("page") ?? 1)), last);
+      return send(res, 200, { data: all.slice((page - 1) * perPage, page * perPage), meta: { total: all.length, per_page: perPage, current_page: page, last_page: last } });
+    }
+    let m;
+    if ((m = route.match(/^\/users\/(\d+)\/permissions$/)) && req.method === "GET") {
+      const u = store.accessUsers.find((x) => x.id === Number(m[1]));
+      if (!u) return deny(404, "not_found");
+      return send(res, 200, { data: { ...u, effective_permissions: u.roles.some((r) => r.key === "hr_administrator") ? HR_PERMS : [] } });
+    }
+    return readBody(req).then((body) => {
+      if (!can(token, "roles.assign") && !can(token, "roles.create") && !can(token, "roles.update") && !can(token, "roles.delete")) return deny(403, "forbidden");
+      if ((m = route.match(/^\/users\/(\d+)\/roles$/)) && req.method === "PUT") {
+        const u = store.accessUsers.find((x) => x.id === Number(m[1]));
+        if (!u) return deny(404, "not_found");
+        if (u.id === 20 && token === DEMO.hrToken) return deny(403, "self_assignment");
+        const ids = Array.isArray(body?.role_ids) ? body.role_ids : [];
+        if (ids.some((id) => !store.roles.find((r) => r.id === id) || store.roles.find((r) => r.id === id).is_protected)) return deny(422, "invalid_role");
+        u.roles = store.roles.filter((r) => ids.includes(r.id)).map((r) => ({ id: r.id, key: r.key, name: r.name, is_system: r.is_system }));
+        return send(res, 200, { data: { id: u.id } });
+      }
+      if (route === "/roles" && req.method === "POST") {
+        if (!can(token, "roles.create")) return deny(403, "forbidden");
+        const perms = Array.isArray(body?.permissions) ? body.permissions : [];
+        if (perms.some((x) => !HR_DELEGATES.includes(x))) return deny(403, "delegation_exceeded");
+        if (typeof body?.name !== "string" || body.name.trim() === "") return send(res, 422, { message: "invalid", errors: { name: ["The name field is required."] } });
+        if (store.roles.some((r) => r.name.toLowerCase() === body.name.trim().toLowerCase())) return send(res, 422, { message: "invalid", errors: { name: ["The name has already been taken."] } });
+        const id = Math.max(0, ...store.roles.map((r) => r.id)) + 1;
+        store.roles.push({ id, uuid: `role-uuid-${id}`, key: `custom_${id}`, name: body.name.trim(), name_ar: body.name_ar ?? null, description: body.description ?? null, is_system: false, is_protected: false, permissions: perms, users_count: 0 });
+        return send(res, 201, { data: { id } });
+      }
+      if ((m = route.match(/^\/roles\/(\d+)$/))) {
+        const r = store.roles.find((x) => x.id === Number(m[1]));
+        if (!r) return deny(404, "not_found");
+        if (r.is_protected) return deny(403, "role_protected");
+        if (req.method === "DELETE") {
+          if (!can(token, "roles.delete")) return deny(403, "forbidden");
+          if (r.users_count > 0 || store.accessUsers.some((u) => u.roles.some((x) => x.id === r.id))) return deny(409, "role_in_use");
+          store.roles = store.roles.filter((x) => x.id !== r.id);
+          return send(res, 200, { message: "Role deleted." });
+        }
+        if (req.method === "PUT") {
+          if (!can(token, "roles.update")) return deny(403, "forbidden");
+          const perms = Array.isArray(body?.permissions) ? body.permissions : r.permissions;
+          if (perms.some((x) => !HR_DELEGATES.includes(x))) return deny(403, "delegation_exceeded");
+          Object.assign(r, { name: body.name ?? r.name, name_ar: body.name_ar ?? null, description: body.description ?? null, permissions: perms });
+          return send(res, 200, { data: { id: r.id } });
+        }
+      }
+      return send(res, 404, { message: "Not found." });
+    });
   }
   /* Phase 3: single-GET + mutations for departments / job-titles / employees. */
   const resMatch = url.pathname.match(/^\/api\/v1\/(departments|job-titles|employees)\/(\d+)$/);
@@ -645,10 +825,13 @@ const server = createServer((req, res) => {
     if (!isKnownToken(token) || revoked) {
       return send(res, 401, { message: "Unauthenticated." });
     }
-    if ((token === DEMO.employeeToken || token === DEMO.managerToken || token === DEMO.unknownroleToken) && req.method !== "GET") {
-      // Policy: create/update/delete are Owner|Admin only (Manager and
-      // Employee both get 403, matching the verified backend policies).
-      return send(res, 403, { message: "This action is unauthorized." });
+    {
+      // Phase 3.2: explicit per-action permissions (SIMULATED contract).
+      const mod = ((resMatch ?? collMatch)[1]).replace("-", "_");
+      const need = req.method === "GET" ? "view" : req.method === "POST" ? "create" : req.method === "PUT" ? "update" : "delete";
+      // Self-service (mirrors EmployeePolicy::view): a user may read ONLY their own linked record.
+      const selfRead = mod === "employees" && need === "view" && resMatch && token === DEMO.employeeToken && store.employees.find((e) => e.id === Number(resMatch[2]))?.user_id === 2;
+      if (!selfRead && !can(token, `${mod}.${need}`)) return send(res, 403, { message: "This action is unauthorized." });
     }
     if (token === DEMO.dashfailToken) {
       return send(res, 500, { message: "SQLSTATE[42S02]: simulated internal error" });
@@ -735,6 +918,13 @@ const server = createServer((req, res) => {
     });
   }
   if (req.method === "GET" && ["/api/v1/departments", "/api/v1/job-titles", "/api/v1/employees", "/api/v1/leave-requests", "/api/v1/permission-requests"].includes(url.pathname)) {
+    {
+      const mod = { "/api/v1/departments": "departments", "/api/v1/job-titles": "job_titles", "/api/v1/employees": "employees" }[url.pathname];
+      if (mod && isKnownToken(token) && !revoked) {
+        MOCK_HITS.push(`${token}:${url.pathname}`);
+        if (!can(token, `${mod}.view`)) return send(res, 403, { message: "This action is unauthorized." });
+      }
+    }
     const knownToken = isKnownToken(token);
     if (!knownToken || revoked) {
       return send(res, 401, { message: "Unauthenticated." });
@@ -852,6 +1042,10 @@ const server = createServer((req, res) => {
       return send(res, 200, paginated(LEAVE_REQUESTS, url));
     }
     return send(res, 200, paginated(PERMISSION_REQUESTS, url));
+  }
+  if (url.pathname === "/__hits") {
+    if (req.method === "DELETE") MOCK_HITS.length = 0;
+    return send(res, 200, { hits: [...MOCK_HITS] });
   }
   if (url.pathname === "/api/v1/auth/logout" && req.method === "POST") {
     if (token === DEMO.inactiveToken) {

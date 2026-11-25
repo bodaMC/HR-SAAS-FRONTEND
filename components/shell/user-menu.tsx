@@ -13,9 +13,10 @@ import { LogoutButton } from "@/components/logout-button";
 import { roleLabelKey } from "@/lib/nav";
 import { useI18n } from "@/lib/i18n/client";
 import type { ApiUser } from "@/lib/types";
+import type { Capabilities } from "@/lib/access";
 
-export function UserMenu({ user, collapsed }: { user: ApiUser; collapsed: boolean }) {
-  const { t } = useI18n();
+export function UserMenu({ user, collapsed, caps }: { user: ApiUser; collapsed: boolean; caps: Capabilities }) {
+  const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -46,7 +47,12 @@ export function UserMenu({ user, collapsed }: { user: ApiUser; collapsed: boolea
     .slice(0, 2)
     .join("")
     .toUpperCase();
-  const roleText = t(`roles.${roleLabelKey(user.role)}`);
+  // Effective RBAC role(s) come from the server-verified access block. The legacy account
+  // type (owner/admin/manager/employee) is a separate, labelled fact and never stands in for a role.
+  const accessRoleText = caps.roles.length
+    ? caps.roles.map((r) => (locale === "ar" && r.name_ar ? r.name_ar : r.name)).join(", ")
+    : t("nav.noAccessRole");
+  const accountTypeText = t(`roles.${roleLabelKey(user.role)}`);
 
   return (
     <div ref={ref} className="relative" data-testid="sidebar-user-zone">
@@ -71,7 +77,7 @@ export function UserMenu({ user, collapsed }: { user: ApiUser; collapsed: boolea
           <>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold text-white">{user.name}</span>
-              <span className="block truncate text-xs text-white/55">{roleText}</span>
+              <span data-testid="user-access-role" className="block truncate text-xs text-white/55">{accessRoleText}</span>
             </span>
             <ChevronDown
               className={`h-4 w-4 shrink-0 text-white/55 transition-transform ${open ? "rotate-180" : ""}`}
@@ -91,9 +97,18 @@ export function UserMenu({ user, collapsed }: { user: ApiUser; collapsed: boolea
             <p className="truncate text-xs text-foreground-muted" dir="ltr">
               {user.email || t("common.emailUnavailable")}
             </p>
-            <span className="mt-1.5 inline-flex items-center rounded-full bg-brand-primary/10 px-2 py-0.5 text-[11px] font-semibold text-brand-strong">
-              {roleText}
+            <p className="mt-2 text-[11px] text-foreground-muted">{t("nav.accessRole")}</p>
+            <span data-testid="user-menu-access-role" className="mt-0.5 inline-flex max-w-full items-center rounded-full bg-brand-primary/10 px-2 py-0.5 text-[11px] font-semibold text-brand-strong">
+              <span className="truncate">{accessRoleText}</span>
             </span>
+            <p className="mt-2 text-[11px] text-foreground-muted">{t("nav.accountType")}</p>
+            <p data-testid="user-menu-account-type" className="text-xs font-medium text-foreground">{accountTypeText}</p>
+            {caps.isPlatformAdmin ? (
+              <>
+                <p className="mt-2 text-[11px] text-foreground-muted">{t("nav.adminIdentity")}</p>
+                <p data-testid="user-menu-platform-identity" className="text-xs font-medium text-foreground">{t("nav.platformAdminIdentity")}</p>
+              </>
+            ) : null}
           </div>
           <div className="px-3 pb-1 pt-2" role="menuitem">
             <LogoutButton />

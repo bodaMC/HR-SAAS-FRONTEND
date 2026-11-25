@@ -176,3 +176,10 @@ export function fetchPermissionRequests(
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
 }
+
+/** Phase 3.2 access administration reads (permission-gated by Laravel on every call). */
+export function fetchAccess<T>(token: string, path: string): Promise<ApiResult<T>> {
+  return request<T>(`/access${path}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}

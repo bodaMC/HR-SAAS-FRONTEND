@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { can } from "@/lib/access";
+import { RestrictedPage } from "@/components/restricted-page";
 import { fetchDepartments } from "@/lib/server/api";
 import { requireSession } from "@/lib/server/guard";
 import { validCollection, validDepartmentRecord } from "@/lib/server/records";
@@ -26,7 +28,12 @@ export default async function DepartmentsPage() {
     );
   }
 
-  const canManage = session.user.role === "owner" || session.user.role === "admin";
+  if (!can(session.caps, "departments.view")) {
+    return <RestrictedPage title={t("access.restricted.title")} body={t("access.restricted.body")} />;
+  }
+  const canCreate = can(session.caps, "departments.create");
+  const canUpdate = can(session.caps, "departments.update");
+  const canDelete = can(session.caps, "departments.delete");
   const items = validCollection<ApiDepartment>(
     await fetchDepartments(session.token),
     validDepartmentRecord,
@@ -42,7 +49,7 @@ export default async function DepartmentsPage() {
           </p>
         </>
       ) : (
-        <EntityManager section="departments" apiPath="/api/departments" items={items} canManage={canManage} />
+        <EntityManager section="departments" apiPath="/api/departments" items={items} canCreate={canCreate} canUpdate={canUpdate} canDelete={canDelete} />
       )}
     </div>
   );

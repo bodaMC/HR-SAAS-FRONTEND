@@ -10,6 +10,8 @@ import { requireSession } from "@/lib/server/guard";
 import { ClearSession } from "@/components/clear-session";
 import { Alert } from "@/components/ui/alert";
 import { roleLabelKey } from "@/lib/nav";
+import { can } from "@/lib/access";
+import { Lock } from "lucide-react";
 import { getI18n } from "@/lib/i18n/server";
 import { formatDate, formatNumber, formatRelativeTime } from "@/lib/i18n/format";
 import type { Locale } from "@/lib/i18n/config";
@@ -56,6 +58,15 @@ function KpiCard({
 function Unavailable({ text }: { text: string }) {
   return (
     <p data-testid="kpi-unavailable" className="text-sm text-foreground-muted">
+      {text}
+    </p>
+  );
+}
+
+function Restricted({ text }: { text: string }) {
+  return (
+    <p data-testid="kpi-restricted" className="flex items-center gap-2 text-sm text-foreground-muted">
+      <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
       {text}
     </p>
   );
@@ -321,22 +332,26 @@ export default async function DashboardPage({
       </main>
     );
   }
-  const { token, user, company } = session;
+  const { token, user, company, caps } = session;
+  // Permission-aware: a restricted module's data is never requested, so it
+  // cannot be fetched-then-hidden, counted or leaked into the payload.
+  const canEmployees = can(caps, "employees.view");
+  const canDepartments = can(caps, "departments.view");
 
   // Each read below is independently authorized by Laravel for the
   // caller's role, and each widget degrades honestly on failure.
   const [employees, departments, pendingLeaves, pendingPermissions, recentLeaves, recentPermissions] =
     await Promise.all([
-      fetchEmployees(token),
-      fetchDepartments(token),
+      canEmployees ? fetchEmployees(token) : Promise.resolve(null),
+      canDepartments ? fetchDepartments(token) : Promise.resolve(null),
       fetchLeaveRequests(token, "?status=pending"),
       fetchPermissionRequests(token, "?status=pending"),
       fetchLeaveRequests(token),
       fetchPermissionRequests(token),
     ]);
 
-  const employeesData = validCollection<ApiEmployee>(employees, validEmployeeRecord);
-  const departmentsData = validCollection<ApiDepartment>(departments, validDepartmentRecord);
+  const employeesData = employees && canEmployees ? validCollection<ApiEmployee>(employees, validEmployeeRecord) : null;
+  const departmentsData = departments && canDepartments ? validCollection<ApiDepartment>(departments, validDepartmentRecord) : null;
   const pendingLeavesPage = validPage<ApiLeaveRequest>(pendingLeaves, validLeaveRecord);
   const pendingPermissionsPage = validPage<ApiPermissionRequest>(pendingPermissions, validPermissionRecord);
   const recentLeavesPage = validPage<ApiLeaveRequest>(recentLeaves, validLeaveRecord);
@@ -392,7 +407,9 @@ export default async function DashboardPage({
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard title={t("dashboard.kpi.employees")}>
-          {employeeTotal === null ? (
+          {!canEmployees ? (
+            <Restricted text={t("dashboard.kpi.restricted")} />
+          ) : employeeTotal === null ? (
             <Unavailable text={t("dashboard.kpi.employeeDataUnavailable")} />
           ) : employeeTotal === 0 ? (
             <p data-testid="kpi-empty" className="text-sm text-foreground-muted">
@@ -417,7 +434,9 @@ export default async function DashboardPage({
         </KpiCard>
 
         <KpiCard title={t("dashboard.kpi.departments")}>
-          {departmentTotal === null ? (
+          {!canDepartments ? (
+            <Restricted text={t("dashboard.kpi.restricted")} />
+          ) : departmentTotal === null ? (
             <Unavailable text={t("dashboard.kpi.departmentDataUnavailable")} />
           ) : departmentTotal === 0 ? (
             <p data-testid="kpi-empty" className="text-sm text-foreground-muted">

@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { can } from "@/lib/access";
+import { RestrictedPage } from "@/components/restricted-page";
 import { fetchJobTitles } from "@/lib/server/api";
 import { requireSession } from "@/lib/server/guard";
 import { validCollection, validJobTitleRecord } from "@/lib/server/records";
@@ -26,7 +28,12 @@ export default async function JobTitlesPage() {
     );
   }
 
-  const canManage = session.user.role === "owner" || session.user.role === "admin";
+  if (!can(session.caps, "job_titles.view")) {
+    return <RestrictedPage title={t("access.restricted.title")} body={t("access.restricted.body")} />;
+  }
+  const canCreate = can(session.caps, "job_titles.create");
+  const canUpdate = can(session.caps, "job_titles.update");
+  const canDelete = can(session.caps, "job_titles.delete");
   const items = validCollection<ApiJobTitle>(
     await fetchJobTitles(session.token),
     validJobTitleRecord,
@@ -42,7 +49,7 @@ export default async function JobTitlesPage() {
           </p>
         </>
       ) : (
-        <EntityManager section="jobTitles" apiPath="/api/job-titles" items={items} canManage={canManage} />
+        <EntityManager section="jobTitles" apiPath="/api/job-titles" items={items} canCreate={canCreate} canUpdate={canUpdate} canDelete={canDelete} />
       )}
     </div>
   );

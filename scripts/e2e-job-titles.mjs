@@ -187,7 +187,8 @@ try {
   await login('employee@orbit.example', 'orbit-demo-password');
   await page.goto(BASE + '/job-titles', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle');
-  check('employee sees list', await rowCount() >= 2, `rows=${await rowCount()}`);
+  // Phase 3.2 (intentional change): without the view permission the module is restricted, never listed.
+  check('employee sees the restricted panel, not the list (Phase 3.2)', (await page.getByTestId('page-restricted').count()) === 1 && (await rowCount()) === 0, `rows=${await rowCount()}`);
   check('employee has no add button', (await page.getByTestId('entity-add').count()) === 0);
   check('employee has no edit buttons', (await page.getByRole('button', { name: 'Edit' }).count()) === 0);
   const empStatus = await page.evaluate(async () => {

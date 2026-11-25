@@ -38,11 +38,18 @@ function failureBody(status: number): { body: Record<string, string>; status: nu
   return { body: { message: "unavailable" }, status: 503 };
 }
 
+/** Stable RBAC refusal codes that may cross to the browser (code only, never raw backend text). */
+export const RBAC_CODES: readonly string[] = [
+  "delegation_exceeded", "role_protected", "role_in_use", "self_assignment", "self_escalation",
+  "last_administrator", "invalid_target", "invalid_role", "forbidden", "not_found",
+];
+
 export async function handleMutation(
   req: NextRequest,
   method: "POST" | "PUT" | "DELETE",
   path: string,
   allowedFields: readonly string[],
+  opts: { rbacCodes?: boolean } = {},
 ): Promise<NextResponse> {
   if (!isSameOriginRequest(req)) {
     /* Distinct code: an untrusted/mismatched origin (for example Production
@@ -78,6 +85,13 @@ export async function handleMutation(
   const r = await mutateApi(token, method, path, body);
   if (r.status === null) {
     return json({ message: "unavailable" }, 503);
+  }
+  if (opts.rbacCodes && (r.status === 403 || r.status === 404 || r.status === 409 || r.status === 422)) {
+    const code = (r.data as { code?: unknown } | null | undefined)?.code;
+    if (typeof code === "string" && RBAC_CODES.includes(code)) {
+      const f = failureBody(r.status ?? 500);
+      return json({ ...f.body, code }, f.status);
+    }
   }
   if (r.status === 422) {
     const sanitized = sanitize422(r.data, allowedFields);

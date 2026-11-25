@@ -32,9 +32,17 @@ export interface LoginSuccess {
   company: ApiCompany | null;
 }
 
+/** Server-verified capabilities from GET /auth/me (Phase 3.2). Recomputed by Laravel on every request. */
+export interface ApiAccess {
+  permissions: string[];
+  roles: { id: number; key: string; name: string; name_ar?: string | null; is_system: boolean }[];
+  is_platform_admin: boolean;
+}
+
 export interface MeResponse {
   user: ApiUser;
   company: ApiCompany | null;
+  access?: ApiAccess;
 }
 
 /** Laravel validation error shape (HTTP 422). */
@@ -176,4 +184,47 @@ export interface Paginated<T> {
 /** Laravel default envelope for unpaginated resource collections. */
 export interface Collection<T> {
   data: T[];
+}
+
+/** Phase 3.2 access administration contracts (verified against the Laravel resources). */
+export interface ApiRole {
+  id: number;
+  uuid: string;
+  key: string;
+  name: string;
+  name_ar: string | null;
+  description: string | null;
+  is_system: boolean;
+  is_protected: boolean;
+  permissions: string[];
+  users_count: number;
+}
+
+export interface ApiPermissionGroup {
+  key: string;
+  permissions: { code: string; grantable_by_you: boolean }[];
+}
+
+export interface ApiPermissionRegistry {
+  groups: ApiPermissionGroup[];
+  protected: string[];
+  reserved: string[];
+  your_permissions: string[];
+}
+
+export interface AccessUsersMeta {
+  total: number;
+  per_page: number;
+  current_page: number;
+  last_page: number;
+}
+
+export interface ApiAccessUser {
+  id: number;
+  name: string;
+  email: string;
+  is_active: boolean;
+  legacy_role: string | null;
+  roles: { id: number; key: string; name: string; name_ar?: string | null; is_system: boolean }[];
+  effective_permissions?: string[];
 }

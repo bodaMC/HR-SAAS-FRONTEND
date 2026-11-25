@@ -25,12 +25,14 @@ interface Props {
   section: "departments" | "jobTitles";
   apiPath: string;
   items: ApiDepartment[];
-  canManage: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
 }
 
 type FormState = { name: string; description: string; is_active: boolean };
 
-export function EntityManager({ section, apiPath, items, canManage }: Props) {
+export function EntityManager({ section, apiPath, items, canCreate, canUpdate, canDelete }: Props) {
   const { t } = useI18n();
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -141,7 +143,7 @@ export function EntityManager({ section, apiPath, items, canManage }: Props) {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-foreground">{t(`${section}.title`)}</h1>
-        {canManage ? (
+        {canCreate ? (
           <Button onClick={openCreate} data-testid="entity-add">
             {t(`${section}.add`)}
           </Button>
@@ -200,18 +202,18 @@ export function EntityManager({ section, apiPath, items, canManage }: Props) {
               </div>
               <div className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-3">
                 <ActionIconButton kind="view" label={t(`${section}.view`)} onClick={() => setViewing(it)} />
-                {canManage ? (
-                  <>
-                    <ActionIconButton kind="edit" label={t("employees.edit")} onClick={() => openEdit(it)} />
-                    <ActionIconButton
-                      kind="delete"
-                      label={t(`${section}.deleteTitle`)}
-                      onClick={() => {
-                        setFatal(null);
-                        setDeleting(it);
-                      }}
-                    />
-                  </>
+                {canUpdate ? (
+                  <ActionIconButton kind="edit" label={t("employees.edit")} onClick={() => openEdit(it)} />
+                ) : null}
+                {canDelete ? (
+                  <ActionIconButton
+                    kind="delete"
+                    label={t(`${section}.deleteTitle`)}
+                    onClick={() => {
+                      setFatal(null);
+                      setDeleting(it);
+                    }}
+                  />
                 ) : null}
               </div>
             </li>
@@ -257,18 +259,18 @@ export function EntityManager({ section, apiPath, items, canManage }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
                         <ActionIconButton kind="view" label={t(`${section}.view`)} onClick={() => setViewing(it)} />
-                        {canManage ? (
-                          <>
-                            <ActionIconButton kind="edit" label={t("employees.edit")} onClick={() => openEdit(it)} />
-                            <ActionIconButton
-                              kind="delete"
-                              label={t(`${section}.deleteTitle`)}
-                              onClick={() => {
-                                setFatal(null);
-                                setDeleting(it);
-                              }}
-                            />
-                          </>
+                        {canUpdate ? (
+                          <ActionIconButton kind="edit" label={t("employees.edit")} onClick={() => openEdit(it)} />
+                        ) : null}
+                        {canDelete ? (
+                          <ActionIconButton
+                            kind="delete"
+                            label={t(`${section}.deleteTitle`)}
+                            onClick={() => {
+                              setFatal(null);
+                              setDeleting(it);
+                            }}
+                          />
                         ) : null}
                       </div>
                     </td>

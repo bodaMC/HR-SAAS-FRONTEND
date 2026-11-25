@@ -261,7 +261,8 @@ try {
   await login('employee@orbit.example', 'orbit-demo-password');
   await page.goto(BASE + '/employees', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle');
-  check('employee sees directory', await rowCount() >= 1, `rows=${await rowCount()}`);
+  // Phase 3.2 (intentional change): no employees.view permission -> restricted panel, no directory.
+  check('employee sees the restricted panel, not the directory (Phase 3.2)', (await page.getByTestId('page-restricted').count()) === 1 && (await rowCount()) === 0, `rows=${await rowCount()}`);
   check('employee has no add button', (await page.getByTestId('employee-add').count()) === 0);
   const empStatus = await page.evaluate(async () => {
     const r = await fetch('/api/employees/2', {
@@ -277,7 +278,8 @@ try {
   check('own profile national id also masked by default', ((await page.getByTestId('profile-national-id').textContent()) ?? '').includes('\u2022'));
   await page.goto(BASE + '/employees/1', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle');
-  check('other profile restricts personal data', await page.getByTestId('profile-personal-restricted').isVisible());
+  // Phase 3.2 (intentional change): another employee's record is refused outright (restricted panel), not shown with fields hidden.
+  check('other profile is refused (restricted panel), no record data', (await page.getByTestId('page-restricted').count()) === 1 && (await page.getByTestId('profile-personal-restricted').count()) === 0 && !(await page.content()).includes('employee-uuid') );
 
   // 12. Malformed profile + backend down
   await login('badempfields@orbit.example', 'orbit-demo-password');
@@ -463,7 +465,7 @@ try {
     await page.goto(BASE + '/employees', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle');
     const tag = who.split('@')[0];
-    check(`${tag}: can view directory`, (await rowCount()) >= 1);
+    check(`${tag}: directory restricted, no rows (Phase 3.2)`, (await page.getByTestId('page-restricted').count()) === 1 && (await rowCount()) === 0);
     check(`${tag}: no add control`, (await page.getByTestId('employee-add').count()) === 0);
     for (const [m, u, b] of [
       ['POST', '/api/employees', { employee_number: 'Z', first_name: 'Z', last_name: 'Z', email: 'z@z.zz' }],

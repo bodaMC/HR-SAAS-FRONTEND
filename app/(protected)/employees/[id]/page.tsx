@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { fetchEmployee, fetchEmployees } from "@/lib/server/api";
+import { can } from "@/lib/access";
+import { RestrictedPage } from "@/components/restricted-page";
 import { requireSession } from "@/lib/server/guard";
 import { validCollection, validEmployeeRecord, validSingle } from "@/lib/server/records";
 import { getI18n } from "@/lib/i18n/server";
@@ -64,12 +66,18 @@ export default async function EmployeeProfilePage({
   })();
   if (!/^\d+$/.test(id)) notFound();
 
-  const result = validSingle<ApiEmployee>(await fetchEmployee(session.token, id), validEmployeeRecord);
+  // Self-service: the backend decides whether this caller may read this record
+  // (employees.view, or their own record). A refusal renders the restricted panel.
+  const rawEmployee = await fetchEmployee(session.token, id);
+  if (!rawEmployee.ok && rawEmployee.status === 403) {
+    return <RestrictedPage title={t("access.restricted.title")} body={t("access.restricted.body")} />;
+  }
+  const result = validSingle<ApiEmployee>(rawEmployee, validEmployeeRecord);
   if (result && "notFound" in result) notFound();
 
-  const canManage = session.user.role === "owner" || session.user.role === "admin";
+  const canManage = can(session.caps, "employees.update") || can(session.caps, "employees.delete");
   const reports =
-    result !== null
+    result !== null && can(session.caps, "employees.view")
       ? validCollection<ApiEmployee>(
           await fetchEmployees(session.token, `?manager_id=${id}`),
           validEmployeeRecord,
@@ -189,6 +197,7 @@ export default async function EmployeeProfilePage({
         )}
       </section>
 
+      {can(session.caps, "employees.view") ? (
       <section className="mt-6 rounded-xl border border-border bg-surface p-5">
         <h2 className="text-xs font-semibold tracking-wider text-foreground-muted uppercase">
           {t("profile.directReports")}
@@ -220,6 +229,7 @@ export default async function EmployeeProfilePage({
           </ul>
         )}
       </section>
+      ) : null}
     </div>
   );
 }

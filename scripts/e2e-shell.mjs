@@ -115,13 +115,14 @@ try {
   // of the sidebar; the menu carries the full identity and sign-out.
   check('sidebar user zone trigger shows name and role',
     (await page.getByTestId('sidebar-user-zone').getByText('Demo Owner', { exact: true }).count()) === 1 &&
-    (await page.getByTestId('sidebar-user-zone').getByText('Owner', { exact: true }).count()) === 1);
+    (await page.getByTestId('user-access-role').textContent()) === 'HR Administrator');
   await page.getByRole('button', { name: 'User menu' }).click();
   await page.getByTestId('user-menu').waitFor({ state: 'visible' });
   check('user menu opens with name/email/role',
     (await page.getByTestId('user-menu').getByText('Demo Owner', { exact: true }).count()) === 1 &&
     (await page.getByTestId('user-menu').getByText('demo@orbit.example', { exact: true }).count()) === 1 &&
-    (await page.getByTestId('user-menu').getByText('Owner', { exact: true }).count()) === 1);
+    (await page.getByTestId('user-menu-access-role').textContent()) === 'HR Administrator' &&
+    (await page.getByTestId('user-menu-account-type').textContent()) === 'Owner');
   await page.keyboard.press('Escape');
   await page.getByTestId('user-menu').waitFor({ state: 'hidden' });
   check('employees KPI from complete collection', await page.getByTestId('employees-total').textContent() === '3');
@@ -136,15 +137,19 @@ try {
 
   // ---- 2. Shell nav: owner sees all sections, planned items badged + non-link ----
   const sidebar = page.getByTestId('sidebar');
+  for (const hidden of ['Audit Logs', 'Company Settings', 'Work Schedules', 'Holidays', 'Approval Workflows']) check(`bootstrapped Owner (HR role) does not see ${hidden}`, (await sidebar.getByText(hidden, { exact: true }).count()) === 0);
+  check('bootstrapped Owner sees Roles & Permissions', (await sidebar.getByRole('link', { name: /Roles & Permissions/ }).count()) === 1);
   check('Administration section visible for owner', await sidebar.getByText('Administration', { exact: true }).isVisible());
   check('Organization section visible', await sidebar.getByText('Organization', { exact: true }).isVisible());
   check('Dashboard link is active', (await sidebar.getByRole('link', { name: /Dashboard/ }).getAttribute('aria-current')) === 'page');
   const plannedBadges = await sidebar.getByText('Soon').count();
-  check('endpoint-backed modules carry Soon badge', plannedBadges === 8, `badges=${plannedBadges}`);
+  // FINAL-V2: a bootstrapped Owner has exactly the HR role: Administration shows Roles & Permissions only (no schedules/holidays/audit/settings).
+  check('endpoint-backed modules carry Soon badge', plannedBadges === 5, `badges=${plannedBadges}`);
   const roadmapBadges = await sidebar.getByText('Roadmap').count();
-  check('no-endpoint modules carry Roadmap badge', roadmapBadges === 4, `badges=${roadmapBadges}`);
+  check('no-endpoint modules carry Roadmap badge', roadmapBadges === 2, `badges=${roadmapBadges}`);
   const plannedLinkCount = await sidebar.getByRole('link').count();
-  check('only active items are links', plannedLinkCount === 4, `links=${plannedLinkCount}`);
+  // Phase 3.2 (intentional change): 4 -> 5 links, Roles & Permissions is a new active Administration module.
+  check('only active items are links', plannedLinkCount === 5, `links=${plannedLinkCount}`);
   check('no Super Admin entry', await sidebar.getByText(/super\s*admin/i).count() === 0);
 
   // ---- 2b. Nav active state on nested routes (Phase 3 visual review) ----
@@ -268,12 +273,39 @@ try {
   // ---- 7. Employee role: Administration hidden ----
   await login('employee@orbit.example');
   check('employee role badge', await page.getByTestId('role-badge').textContent() === 'Employee');
-  // Administration stays visible: work schedules/holidays read access is
-  // verified for all roles; only Audit Logs is policy-gated owner/admin.
-  check('Administration visible for employee', await page.getByTestId('sidebar').getByText('Administration', { exact: true }).isVisible());
-  check('Audit Logs hidden for employee', (await page.getByTestId('sidebar').getByText('Audit Logs', { exact: true }).count()) === 0);
-  check('Work Schedules visible for employee', await page.getByTestId('sidebar').getByText('Work Schedules', { exact: true }).isVisible());
+  // Phase 3.2 (intentional change): Administration is HIDDEN for Employee, absent from the DOM.
+  const sb = page.getByTestId('sidebar');
+  check('Administration heading absent for employee', (await sb.getByText('Administration', { exact: true }).count()) === 0);
+  // Rendered DOM only: <script> payloads are excluded because the i18n dictionary (static UI copy for
+  // every screen, no tenant data) is serialized into the client bundle for all users.
+  const renderedHtml = () => page.evaluate(() => { const c = document.documentElement.cloneNode(true); c.querySelectorAll('script').forEach((n) => n.remove()); return c.outerHTML; });
+  const empHtml = await renderedHtml();
+  for (const word of ['Audit Logs', 'Work Schedules', 'Holidays', 'Company Settings', 'Roles & Permissions', 'Roles &amp; Permissions', 'Approval Workflows']) {
+    check(`'${word}' not in employee DOM`, !empHtml.includes(word));
+  }
+  for (const [key, label] of [['employees', 'Employees'], ['departments', 'Departments'], ['jobTitles', 'Job Titles']]) {
+    const el = page.getByTestId(`nav-restricted-${key}`);
+    check(`${label} restricted for employee`, (await el.count()) === 1 && (await el.getAttribute('aria-disabled')) === 'true');
+    check(`${label} restricted entry is not a link`, (await sb.getByRole('link', { name: label, exact: true }).count()) === 0);
+    check(`${label} restricted entry shows lock icon`, (await el.getByTestId('nav-lock-icon').count()) === 1);
+  }
+  check('employee dashboard shows restricted cards, no counts', (await page.getByTestId('kpi-restricted').count()) === 2 && (await page.getByTestId('employees-total').count()) === 0 && (await page.getByTestId('departments-total').count()) === 0);
   check('employee still sees HR Management', await page.getByTestId('sidebar').getByText('HR Management', { exact: true }).isVisible());
+  // Collapsed sidebar keeps the same states.
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+  check('collapsed: restricted entries remain, Administration absent', (await page.getByTestId('nav-restricted-employees').count()) === 1 && !(await renderedHtml()).includes('Audit Logs'));
+  await page.getByRole('button', { name: 'Expand sidebar' }).click();
+  // Mobile drawer.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByTestId('welcome-name').waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByTestId('mobile-drawer').waitFor({ state: 'visible' });
+  const drawer = page.getByTestId('mobile-drawer');
+  check('mobile: Administration absent for employee', (await drawer.getByText('Administration', { exact: true }).count()) === 0 && (await drawer.getByText('Audit Logs').count()) === 0);
+  check('mobile: restricted Employees is not a link', (await drawer.getByText('Employees', { exact: true }).count()) === 1 && (await drawer.getByRole('link', { name: 'Employees', exact: true }).count()) === 0);
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.mouse.move(5, 5);
   await shot(page, '13-dashboard-desktop-light-employee');
   await signOut();

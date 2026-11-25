@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { fetchDepartments, fetchEmployee, fetchEmployees, fetchJobTitles } from "@/lib/server/api";
+import { can } from "@/lib/access";
+import { emptyCollection } from "@/lib/server/empty";
 import { requireSession } from "@/lib/server/guard";
 import {
   validCollection,
@@ -36,7 +38,7 @@ export default async function EditEmployeePage({
     );
   }
 
-  const canManage = session.user.role === "owner" || session.user.role === "admin";
+  const canManage = can(session.caps, "employees.update");
   if (!canManage) {
     return (
       <div className="mx-auto w-full max-w-2xl">
@@ -50,8 +52,8 @@ export default async function EditEmployeePage({
 
   const [employeeRes, departments, jobTitles, employees] = await Promise.all([
     fetchEmployee(session.token, id),
-    fetchDepartments(session.token),
-    fetchJobTitles(session.token),
+    can(session.caps, "departments.view") ? fetchDepartments(session.token) : Promise.resolve(emptyCollection<ApiDepartment>()),
+    can(session.caps, "job_titles.view") ? fetchJobTitles(session.token) : Promise.resolve(emptyCollection<ApiJobTitle>()),
     fetchEmployees(session.token),
   ]);
   const result = validSingle<ApiEmployee>(employeeRes, validEmployeeRecord);
