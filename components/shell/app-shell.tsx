@@ -100,7 +100,16 @@ function SidebarContent({
               const label = t(`nav.items.${item.labelKey}`);
               const badge = t(item.badgeKey === "soon" ? "common.soon" : "common.roadmap");
               const Icon = item.icon;
-              const active = item.href !== undefined && pathname === item.href;
+              // Active on the section route itself and on every nested
+              // route below it (new / [id] / [id]/edit), so the current
+              // module stays highlighted while working inside it. The
+              // dashboard ("/") stays exact-only, or it would match every
+              // route.
+              const active =
+                item.href !== undefined &&
+                (item.href === "/"
+                  ? pathname === "/"
+                  : pathname === item.href || pathname.startsWith(`${item.href}/`));
 
               if (item.status !== "active" || !item.href) {
                 const meaning = t(
@@ -119,14 +128,14 @@ function SidebarContent({
                       onFocus={collapsed ? (e) => showTooltip(e, `${label} · ${badge}`) : undefined}
                       onBlur={collapsed ? hideTooltip : undefined}
                       tabIndex={collapsed ? 0 : undefined}
-                      className={`flex h-11 cursor-not-allowed items-center gap-3 rounded-lg px-3 text-sm text-white/40 ${
+                      className={`flex min-h-11 cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/40 ${
                         collapsed ? "justify-center px-0" : ""
                       }`}
                     >
                       <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                      {!collapsed && <span className="flex-1 truncate">{label}</span>}
+                      {!collapsed && <span className="min-w-0 flex-1 break-words leading-snug">{label}</span>}
                       {!collapsed && (
-                        <span className="rounded-full border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-white/45 uppercase">
+                        <span className="shrink-0 rounded-full border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-white/45 uppercase">
                           {badge}
                         </span>
                       )}
@@ -146,7 +155,7 @@ function SidebarContent({
                     onMouseLeave={collapsed ? hideTooltip : undefined}
                     onFocus={collapsed ? (e) => showTooltip(e, label) : undefined}
                     onBlur={collapsed ? hideTooltip : undefined}
-                    className={`relative flex h-11 items-center gap-3 rounded-lg px-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-brand-accent ${
+                    className={`relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-brand-accent ${
                       active
                         ? "bg-brand-accent/15 font-semibold text-white"
                         : "font-medium text-white/70 hover:bg-white/5 hover:text-white"
@@ -162,7 +171,7 @@ function SidebarContent({
                       className={`h-5 w-5 shrink-0 ${active ? "text-brand-accent" : ""}`}
                       aria-hidden="true"
                     />
-                    {!collapsed && <span className="truncate">{label}</span>}
+                    {!collapsed && <span className="min-w-0 break-words leading-snug">{label}</span>}
                   </Link>
                 </li>
               );
@@ -174,12 +183,35 @@ function SidebarContent({
   );
 }
 
+const BREADCRUMB_KEYS: Record<string, string> = {
+  employees: "nav.items.employees",
+  departments: "nav.items.departments",
+  "job-titles": "nav.items.jobTitles",
+  new: "breadcrumb.new",
+  edit: "breadcrumb.edit",
+};
+
+function breadcrumbCrumbs(pathname: string, t: (key: string) => string): string[] {
+  if (pathname === "/") return [t("nav.items.dashboard")];
+  const crumbs: string[] = [];
+  const segments = pathname.split("/").filter(Boolean);
+  segments.forEach((seg, i) => {
+    if (/^\d+$/.test(seg)) {
+      if (i === segments.length - 1) crumbs.push(t("breadcrumb.details"));
+      return;
+    }
+    const key = BREADCRUMB_KEYS[seg];
+    crumbs.push(key ? t(key) : seg);
+  });
+  return crumbs.length > 0 ? crumbs : [t("nav.items.dashboard")];
+}
+
 function SidebarBrand({
   collapsed,
-  companyName,
+  tenantName,
 }: {
   collapsed: boolean;
-  companyName: string;
+  tenantName: string | null;
 }) {
   const { t } = useI18n();
   return (
@@ -194,9 +226,12 @@ function SidebarBrand({
       {!collapsed && (
         <div className="min-w-0">
           <p className="truncate text-sm font-extrabold tracking-tight text-white">
-            {companyName}
+            {t("brand.companyName")}
           </p>
           <p className="truncate text-[11px] font-medium text-white/70">{t("brand.productName")}</p>
+          {tenantName ? (
+            <p className="truncate text-[10px] font-medium text-white/50">{tenantName}</p>
+          ) : null}
         </div>
       )}
     </div>
@@ -311,7 +346,6 @@ export function AppShell({
   );
   const hideTooltip = useCallback(() => setTooltip(null), []);
 
-  const companyName = company?.name ?? t("brand.companyName");
 
   return (
     <div className="flex min-h-dvh bg-background">
@@ -323,7 +357,7 @@ export function AppShell({
           effectiveCollapsed ? "w-20" : "w-[260px]"
         }`}
       >
-        <SidebarBrand collapsed={effectiveCollapsed} companyName={companyName} />
+        <SidebarBrand collapsed={effectiveCollapsed} tenantName={company?.name ?? null} />
         <SidebarContent
           role={user.role}
           collapsed={effectiveCollapsed}
@@ -376,9 +410,12 @@ export function AppShell({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-extrabold tracking-tight text-white">
-                  {companyName}
+                  {t("brand.companyName")}
                 </p>
                 <p className="truncate text-[11px] font-medium text-white/70">{t("brand.productName")}</p>
+                {company?.name ? (
+                  <p className="truncate text-[10px] font-medium text-white/50">{company.name}</p>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -406,7 +443,7 @@ export function AppShell({
       {/* Main column (inert while the mobile drawer is open) */}
       <div
         data-testid="app-main-column"
-        className={`flex min-h-dvh flex-1 flex-col transition-[padding] duration-200 motion-reduce:transition-none ${
+        className={`flex min-h-dvh min-w-0 flex-1 flex-col transition-[padding] duration-200 motion-reduce:transition-none ${
           effectiveCollapsed ? "lg:ps-20" : "lg:ps-[260px]"
         }`}
       >
@@ -422,7 +459,7 @@ export function AppShell({
             <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
           <div className="min-w-0 max-[420px]:hidden sm:hidden">
-            <p className="truncate text-sm font-extrabold tracking-tight text-foreground">{companyName}</p>
+            <p className="truncate text-sm font-extrabold tracking-tight text-foreground">{t("brand.companyName")}</p>
             <p className="truncate text-xs text-foreground-muted">{t("brand.productName")}</p>
           </div>
           <nav aria-label="Breadcrumb" className="hidden min-w-0 flex-1 overflow-hidden sm:block">
@@ -431,11 +468,18 @@ export function AppShell({
               <li aria-hidden="true" className="text-foreground-muted">
                 <ChevronRight className="h-3.5 w-3.5 rtl:-scale-x-100" />
               </li>
-              <li aria-current="page" className="truncate font-semibold text-foreground">
-                {pathname === "/"
-                  ? t("nav.items.dashboard")
-                  : pathname.split("/").filter(Boolean).pop()}
-              </li>
+              {breadcrumbCrumbs(pathname, t).map((crumb, i, arr) => (
+                <li
+                  key={`${crumb}-${i}`}
+                  aria-current={i === arr.length - 1 ? "page" : undefined}
+                  className={`flex items-center gap-1.5 ${i === arr.length - 1 ? "truncate font-semibold text-foreground" : "text-foreground-muted"}`}
+                >
+                  {i > 0 ? (
+                    <ChevronRight className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden="true" />
+                  ) : null}
+                  <span className="truncate">{crumb}</span>
+                </li>
+              ))}
             </ol>
           </nav>
           <div className="ms-auto flex items-center gap-2">
@@ -443,7 +487,7 @@ export function AppShell({
             <ThemeToggle />
           </div>
         </header>
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
         <footer className="border-t border-border py-4">
           <p className="text-center text-xs text-foreground-muted">{t("brand.footerLine")}</p>
         </footer>

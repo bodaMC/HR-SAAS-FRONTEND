@@ -61,13 +61,33 @@ export interface ApiJobTitle {
   is_active: boolean;
 }
 
-export interface ApiEmployee {
+/** Embedded manager shape (verified in EmployeeResource). */
+export interface ApiManagerRef {
   id: number;
   uuid: string;
   employee_number: string | null;
   first_name: string;
   last_name: string;
   email: string | null;
+}
+
+/** Embedded linked-user shape (verified in EmployeeResource). */
+export interface ApiUserRef {
+  id: number;
+  uuid: string;
+  name: string;
+  email: string;
+}
+
+export interface ApiEmployee {
+  id: number;
+  uuid: string;
+  employee_number: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  hire_date: string | null;
+  termination_date: string | null;
   employment_status: "active" | "on_leave" | "suspended" | "terminated" | string;
   department_id: number | null;
   job_title_id: number | null;
@@ -75,6 +95,49 @@ export interface ApiEmployee {
   user_id: number | null;
   department?: ApiDepartment | null;
   job_title?: ApiJobTitle | null;
+  manager?: ApiManagerRef | null;
+  user?: ApiUserRef | null;
+  /* Personal data is conditionally PRESENT per record, gated server-side by
+   * the viewPersonalData policy (mergeWhen in EmployeeResource). Absence
+   * means "not permitted for the caller", never "no value". */
+  phone?: string | null;
+  date_of_birth?: string | null;
+  gender?: "male" | "female" | "other" | "prefer_not_to_say" | string | null;
+  national_id?: string | null;
+}
+
+/* Phase 3 mutation payloads (fields verified in the form requests; anything
+ * else - team_leader_id, is_disabled, insurance_years, is_hod,
+ * is_team_leader, is_project_engineer, is_ceo, company_id - is not writable
+ * through the API and is never sent). */
+export interface DepartmentInput {
+  name: string;
+  description?: string | null;
+  is_active?: boolean | null;
+}
+
+export interface JobTitleInput {
+  name: string;
+  description?: string | null;
+  is_active?: boolean | null;
+}
+
+export interface EmployeeInput {
+  employee_number: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string | null;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  national_id?: string | null;
+  hire_date?: string | null;
+  termination_date?: string | null;
+  employment_status?: string | null;
+  department_id?: number | null;
+  job_title_id?: number | null;
+  manager_id?: number | null;
+  user_id?: number | null;
 }
 
 export interface ApiLeaveType {

@@ -70,9 +70,9 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: "organization",
     items: [
-      { labelKey: "employees", icon: UsersRound, status: "planned", badgeKey: "soon" },
-      { labelKey: "departments", icon: Building2, status: "planned", badgeKey: "soon" },
-      { labelKey: "jobTitles", icon: BriefcaseBusiness, status: "planned", badgeKey: "soon" },
+      { labelKey: "employees", icon: UsersRound, href: "/employees", status: "active", badgeKey: "soon" },
+      { labelKey: "departments", icon: Building2, href: "/departments", status: "active", badgeKey: "soon" },
+      { labelKey: "jobTitles", icon: BriefcaseBusiness, href: "/job-titles", status: "active", badgeKey: "soon" },
       { labelKey: "orgStructure", icon: Network, status: "roadmap", badgeKey: "roadmap" },
       { labelKey: "projects", icon: FolderKanban, status: "planned", badgeKey: "soon" },
     ],

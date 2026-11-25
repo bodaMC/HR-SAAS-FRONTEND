@@ -12,6 +12,8 @@
  * Test accounts (all password "orbit-demo-password"):
  *   demo@orbit.example            owner role, populated fixtures
  *   employee@orbit.example        employee role (nav gating tests)
+ *   manager@orbit.example         manager role (RBAC: reads allowed,
+ *                                 mutations rejected with 403)
  *   dashfail@orbit.example        /employees, /leave-requests and
  *                                 /permission-requests return 500,
  *                                 /departments returns an empty collection
@@ -85,6 +87,19 @@ const DEMO = {
     email: "employee@orbit.example",
     phone: null,
     role: "employee",
+    is_active: true,
+    email_verified_at: null,
+    created_at: "2026-01-01T00:00:00.000000Z",
+    updated_at: "2026-01-01T00:00:00.000000Z",
+  },
+  managerToken: "mock-sanctum-token-manager",
+  managerUser: {
+    id: 10,
+    uuid: "3f6d0f62-4d9b-4f2a-9f3a-0demo0000011",
+    name: "Demo Manager",
+    email: "manager@orbit.example",
+    phone: null,
+    role: "manager",
     is_active: true,
     email_verified_at: null,
     created_at: "2026-01-01T00:00:00.000000Z",
@@ -211,6 +226,7 @@ const DEMO = {
 };
 
 const EXTRA_TOKENS = {
+  [DEMO.managerToken]: DEMO.managerUser,
   [DEMO.forbiddenToken]: DEMO.forbiddenUser,
   [DEMO.brokensessionToken]: DEMO.brokensessionUser,
   [DEMO.malformedToken]: DEMO.malformedUser,
@@ -236,27 +252,47 @@ const FIXTURES = {
     { id: 2, uuid: "dep-uuid-0002", name: "MEP Engineering", description: "Mechanical, electrical and plumbing", is_active: true },
     { id: 3, uuid: "dep-uuid-0003", name: "Project Management", description: "Delivery and supervision", is_active: false },
   ],
+  jobTitles: [
+    { id: 1, uuid: "job-uuid-0001", name: "Principal Engineer", description: null, is_active: true },
+    { id: 2, uuid: "job-uuid-0002", name: "Senior Engineer", description: null, is_active: true },
+  ],
+  users: [
+    { id: 1, uuid: "user-uuid-0001", name: "Demo Owner", email: "demo@orbit.example" },
+    { id: 2, uuid: "user-uuid-0002", name: "Demo Employee", email: "employee@orbit.example" },
+  ],
   employees: [
     {
       id: 1, uuid: "emp-uuid-0001", employee_number: "EMP-001",
       first_name: "Demo", last_name: "Owner", email: "demo@orbit.example",
       employment_status: "active", department_id: 1, job_title_id: 1, manager_id: null, user_id: 1,
+      hire_date: "2020-01-15", termination_date: null,
+      phone: "+201000000001", date_of_birth: "1990-05-10", gender: "male", national_id: "29005100100011",
       department: { id: 1, uuid: "dep-uuid-0001", name: "Structural Engineering", description: "Structural design and review", is_active: true },
       job_title: { id: 1, uuid: "job-uuid-0001", name: "Principal Engineer", description: null, is_active: true },
+      manager: null,
+      user: { id: 1, uuid: "user-uuid-0001", name: "Demo Owner", email: "demo@orbit.example" },
     },
     {
       id: 2, uuid: "emp-uuid-0002", employee_number: "EMP-002",
       first_name: "Demo", last_name: "Employee", email: "employee@orbit.example",
       employment_status: "active", department_id: 2, job_title_id: 2, manager_id: 1, user_id: 2,
+      hire_date: "2021-03-01", termination_date: null,
+      phone: "+201000000002", date_of_birth: "1995-08-20", gender: "female", national_id: "29508200100022",
       department: { id: 2, uuid: "dep-uuid-0002", name: "MEP Engineering", description: "Mechanical, electrical and plumbing", is_active: true },
       job_title: { id: 2, uuid: "job-uuid-0002", name: "Senior Engineer", description: null, is_active: true },
+      manager: { id: 1, uuid: "emp-uuid-0001", employee_number: "EMP-001", first_name: "Demo", last_name: "Owner", email: "demo@orbit.example" },
+      user: { id: 2, uuid: "user-uuid-0002", name: "Demo Employee", email: "employee@orbit.example" },
     },
     {
       id: 3, uuid: "emp-uuid-0003", employee_number: "EMP-003",
       first_name: "Onleave", last_name: "Tester", email: "onleave@orbit.example",
       employment_status: "on_leave", department_id: 1, job_title_id: 2, manager_id: 1, user_id: null,
+      hire_date: "2022-06-01", termination_date: null,
+      phone: null, date_of_birth: "1998-01-01", gender: "other", national_id: null,
       department: { id: 1, uuid: "dep-uuid-0001", name: "Structural Engineering", description: "Structural design and review", is_active: true },
       job_title: { id: 2, uuid: "job-uuid-0002", name: "Senior Engineer", description: null, is_active: true },
+      manager: { id: 1, uuid: "emp-uuid-0001", employee_number: "EMP-001", first_name: "Demo", last_name: "Owner", email: "demo@orbit.example" },
+      user: null,
     },
   ],
   leaveTypes: [
@@ -279,6 +315,173 @@ const PERMISSION_REQUESTS = [
   { id: 2, uuid: "pr-uuid-0002", employee: { id: 2, first_name: "Demo", last_name: "Employee" }, date: "2026-05-20", status: "approved", created_at: "2026-05-19T08:00:00.000000Z" },
   { id: 1, uuid: "pr-uuid-0001", employee: { id: 2, first_name: "Demo", last_name: "Employee" }, date: "2026-04-22", status: "rejected", created_at: "2026-04-21T08:00:00.000000Z" },
 ];
+
+/* Phase 3: mutable stores for departments / job-titles / employees.
+ * Deletions are SOFT (deleted flag) mirroring the backend's SoftDeletes:
+ * deleted rows vanish from lists and embedded relations resolve to null,
+ * but FK ids stay on the record. All data is fictional. */
+const store = {
+  departments: structuredClone(FIXTURES.departments),
+  jobTitles: structuredClone(FIXTURES.jobTitles),
+  employees: structuredClone(FIXTURES.employees),
+  deleted: { departments: new Set(), jobTitles: new Set(), employees: new Set() },
+};
+
+function embedEmployee(emp, token) {
+  const dep = store.departments.find((d) => d.id === emp.department_id && !store.deleted.departments.has(d.id));
+  const job = store.jobTitles.find((j) => j.id === emp.job_title_id && !store.deleted.jobTitles.has(j.id));
+  const mgr = store.employees.find((m) => m.id === emp.manager_id && !store.deleted.employees.has(m.id));
+  const usr = FIXTURES.users.find((u) => u.id === emp.user_id);
+  const out = {
+    ...emp,
+    department: dep ?? null,
+    job_title: job ?? null,
+    manager: mgr
+      ? { id: mgr.id, uuid: mgr.uuid, employee_number: mgr.employee_number, first_name: mgr.first_name, last_name: mgr.last_name, email: mgr.email }
+      : null,
+    user: usr ?? null,
+  };
+  /* viewPersonalData policy (verified): owner/admin see personal data on
+   * every record; an employee sees only their own record's; a manager
+   * sees only records in their management hierarchy (the demo manager
+   * manages nobody, so nothing extra). */
+  const isPrivileged = token !== DEMO.employeeToken && token !== DEMO.managerToken && token !== DEMO.unknownroleToken;
+  const isSelf = emp.user_id === 2 && token === DEMO.employeeToken;
+  if (!isPrivileged && !isSelf) {
+    delete out.phone;
+    delete out.date_of_birth;
+    delete out.gender;
+    delete out.national_id;
+  }
+  return out;
+}
+
+function isKnownToken(token) {
+  return token === DEMO.token || token === DEMO.employeeToken || token === DEMO.dashfailToken || token in EXTRA_TOKENS;
+}
+
+function laravel422(errors) {
+  const count = Object.values(errors).reduce((n, arr) => n + arr.length - 1, 0);
+  const first = Object.values(errors)[0]?.[0] ?? "Invalid value.";
+  return {
+    message: count > 0 ? `${first} (and ${count} more error${count > 1 ? "s" : ""})` : first,
+    errors,
+  };
+}
+
+function validateOrgEntity(body, items, selfId) {
+  const errors = {};
+  if (typeof body.name !== "string" || body.name.trim() === "") {
+    errors.name = ["The name field is required."];
+  } else if (body.name.length > 255) {
+    errors.name = ["The name field must not be greater than 255 characters."];
+  } else if (items.some((d) => d.id !== selfId && d.name === body.name)) {
+    errors.name = ["The name has already been taken."];
+  }
+  if (body.description !== undefined && body.description !== null) {
+    if (typeof body.description !== "string" || body.description.length > 1000) {
+      errors.description = ["The description field must not be greater than 1000 characters."];
+    }
+  }
+  if (body.is_active !== undefined && body.is_active !== null && typeof body.is_active !== "boolean") {
+    errors.is_active = ["The is active field must be true or false."];
+  }
+  return errors;
+}
+
+function validateEmployee(body, selfId) {
+  const errors = {};
+  const emps = store.employees.filter((e) => !store.deleted.employees.has(e.id));
+  /* Simulated tenant-scope failure keyed by a field the frontend BFF does
+   * NOT allow: proves a 422 without known field errors still surfaces a
+   * generic localized message instead of failing silently. */
+  if (body.first_name === "Unknown422") {
+    errors.tenant_scope = ["The tenant scope check failed."];
+    return errors;
+  }
+  for (const f of ["employee_number", "first_name", "last_name", "email"]) {
+    if (body[f] === undefined && selfId != null) continue; // sometimes rules on update
+    if (typeof body[f] !== "string" || body[f].trim() === "") {
+      errors[f] = [`The ${f.replaceAll("_", " ")} field is required.`];
+    }
+  }
+  if (typeof body.employee_number === "string" && body.employee_number.length > 50) {
+    errors.employee_number = ["The employee number field must not be greater than 50 characters."];
+  }
+  if (typeof body.employee_number === "string" && emps.some((e) => e.id !== selfId && e.employee_number === body.employee_number)) {
+    errors.employee_number = ["The employee number has already been taken."];
+  }
+  if (typeof body.email === "string" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email)) {
+    errors.email = ["The email field must be a valid email address."];
+  } else if (typeof body.email === "string" && emps.some((e) => e.id !== selfId && e.email === body.email)) {
+    errors.email = ["The email has already been taken."];
+  }
+  if (body.gender !== undefined && body.gender !== null && !["male", "female", "other", "prefer_not_to_say"].includes(body.gender)) {
+    errors.gender = ["The selected gender is invalid."];
+  }
+  if (body.employment_status !== undefined && body.employment_status !== null && !["active", "on_leave", "suspended", "terminated"].includes(body.employment_status)) {
+    errors.employment_status = ["The selected employment status is invalid."];
+  }
+  const dateOk = (v) => typeof v === "string" && !Number.isNaN(new Date(v).getTime());
+  if (body.date_of_birth !== undefined && body.date_of_birth !== null) {
+    if (!dateOk(body.date_of_birth)) errors.date_of_birth = ["The date of birth field must be a valid date."];
+    else if (new Date(body.date_of_birth) >= new Date(new Date().toDateString())) {
+      errors.date_of_birth = ["The date of birth field must be a date before today."];
+    }
+  }
+  for (const f of ["hire_date", "termination_date"]) {
+    if (body[f] !== undefined && body[f] !== null && !dateOk(body[f])) {
+      errors[f] = [`The ${f.replaceAll("_", " ")} field must be a valid date.`];
+    }
+  }
+  const hire = body.hire_date !== undefined ? body.hire_date : null;
+  const term = body.termination_date !== undefined ? body.termination_date : null;
+  if (term && hire && dateOk(term) && dateOk(hire) && new Date(term) < new Date(hire)) {
+    errors.termination_date = ["The termination date field must be a date after or equal to hire date."];
+  }
+  if (body.department_id !== undefined && body.department_id !== null &&
+      !store.departments.some((d) => d.id === body.department_id && !store.deleted.departments.has(d.id))) {
+    errors.department_id = ["The selected department id is invalid."];
+  }
+  if (body.job_title_id !== undefined && body.job_title_id !== null &&
+      !store.jobTitles.some((j) => j.id === body.job_title_id && !store.deleted.jobTitles.has(j.id))) {
+    errors.job_title_id = ["The selected job title id is invalid."];
+  }
+  if (body.manager_id !== undefined && body.manager_id !== null) {
+    if (!emps.some((e) => e.id === body.manager_id)) {
+      errors.manager_id = ["The selected manager id is invalid."];
+    } else if (selfId != null) {
+      /* Backend mirrors Rule::notIn(self + all direct/indirect
+       * subordinates): assigning self or anyone below self in the
+       * reporting chain is rejected to prevent cycles. */
+      const invalid = new Set([selfId]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const e of emps) {
+          if (e.manager_id != null && invalid.has(e.manager_id) && !invalid.has(e.id)) {
+            invalid.add(e.id);
+            changed = true;
+          }
+        }
+      }
+      if (invalid.has(body.manager_id)) {
+        errors.manager_id = ["The selected manager id is invalid."];
+      }
+    }
+  }
+  return errors;
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    let raw = "";
+    req.on("data", (c) => (raw += c));
+    req.on("end", () => {
+      try { resolve(JSON.parse(raw)); } catch { resolve(null); }
+    });
+  });
+}
 
 function paginated(data, url) {
   const status = url.searchParams.get("status");
@@ -352,6 +555,7 @@ const server = createServer((req, res) => {
       }
       const extraByEmail = {
         "employee@orbit.example": [DEMO.employeeToken, DEMO.employeeUser],
+        "manager@orbit.example": [DEMO.managerToken, DEMO.managerUser],
         "dashfail@orbit.example": [DEMO.dashfailToken, DEMO.dashfailUser],
         "forbidden@orbit.example": [DEMO.forbiddenToken, DEMO.forbiddenUser],
         "brokensession@orbit.example": [DEMO.brokensessionToken, DEMO.brokensessionUser],
@@ -434,8 +638,104 @@ const server = createServer((req, res) => {
     const user = token === DEMO.token ? DEMO.user : token === DEMO.employeeToken ? DEMO.employeeUser : token === DEMO.dashfailToken ? DEMO.dashfailUser : EXTRA_TOKENS[token];
     return send(res, 200, { user, company: DEMO.company });
   }
-  if (req.method === "GET" && ["/api/v1/departments", "/api/v1/employees", "/api/v1/leave-requests", "/api/v1/permission-requests"].includes(url.pathname)) {
-    const knownToken = token === DEMO.token || token === DEMO.employeeToken || token === DEMO.dashfailToken || token in EXTRA_TOKENS;
+  /* Phase 3: single-GET + mutations for departments / job-titles / employees. */
+  const resMatch = url.pathname.match(/^\/api\/v1\/(departments|job-titles|employees)\/(\d+)$/);
+  const collMatch = url.pathname.match(/^\/api\/v1\/(departments|job-titles|employees)$/);
+  if (resMatch || (collMatch && req.method !== "GET")) {
+    if (!isKnownToken(token) || revoked) {
+      return send(res, 401, { message: "Unauthenticated." });
+    }
+    if ((token === DEMO.employeeToken || token === DEMO.managerToken || token === DEMO.unknownroleToken) && req.method !== "GET") {
+      // Policy: create/update/delete are Owner|Admin only (Manager and
+      // Employee both get 403, matching the verified backend policies).
+      return send(res, 403, { message: "This action is unauthorized." });
+    }
+    if (token === DEMO.dashfailToken) {
+      return send(res, 500, { message: "SQLSTATE[42S02]: simulated internal error" });
+    }
+    const kind = (resMatch ?? collMatch)[1];
+    const idParam = resMatch ? Number(resMatch[2]) : null;
+    const items = kind === "departments" ? store.departments : kind === "job-titles" ? store.jobTitles : store.employees;
+    const deletedSet = kind === "departments" ? store.deleted.departments : kind === "job-titles" ? store.deleted.jobTitles : store.deleted.employees;
+
+    if (req.method === "GET" && idParam != null) {
+      // Simulated cross-tenant id: exists in another tenant's data, so the
+      // global tenant scope resolves it to 404 (verified backend behavior).
+      if (idParam >= 900000) {
+        return send(res, 404, { message: "No query results for model [cross-tenant]" });
+      }
+      if (token === DEMO.badempfieldsToken && kind === "employees") {
+        return send(res, 200, { data: { id: idParam, uuid: "emp-bad-0001", last_name: "Record" } });
+      }
+      const found = items.find((d) => d.id === idParam);
+      if (!found || deletedSet.has(found.id)) {
+        return send(res, 404, { message: `No query results for model [App\\Models\\${kind === "employees" ? "Employee" : kind === "departments" ? "Department" : "JobTitle"}] ${idParam}` });
+      }
+      return send(res, 200, { data: kind === "employees" ? embedEmployee(found, token) : found });
+    }
+
+    if (req.method === "DELETE" && idParam != null) {
+      const found = items.find((d) => d.id === idParam);
+      if (!found || deletedSet.has(found.id)) {
+        return send(res, 404, { message: "Not found." });
+      }
+      deletedSet.add(found.id);
+      return send(res, 200, { message: "." });
+    }
+
+    return readBody(req).then((body) => {
+      if (body === null || typeof body !== "object") {
+        return send(res, 400, { message: "Invalid JSON." });
+      }
+      if (token === DEMO.badempfieldsToken) {
+        // 200 with a malformed success envelope: the BFF must not forward it.
+        return send(res, 200, { unexpected: true });
+      }
+      if (kind === "employees") {
+        const errors = validateEmployee(body, req.method === "PUT" ? idParam : null);
+        if (Object.keys(errors).length > 0) return send(res, 422, laravel422(errors));
+        if (req.method === "POST") {
+          const id = Math.max(0, ...store.employees.map((e) => e.id)) + 1;
+          const rec = {
+            id, uuid: `emp-uuid-${String(id).padStart(4, "0")}`,
+            employee_number: body.employee_number, first_name: body.first_name, last_name: body.last_name,
+            email: body.email, phone: body.phone ?? null, date_of_birth: body.date_of_birth ?? null,
+            gender: body.gender ?? null, national_id: body.national_id ?? null,
+            hire_date: body.hire_date ?? null, termination_date: body.termination_date ?? null,
+            employment_status: body.employment_status ?? "active",
+            department_id: body.department_id ?? null, job_title_id: body.job_title_id ?? null,
+            manager_id: body.manager_id ?? null, user_id: body.user_id ?? null,
+          };
+          store.employees.push(rec);
+          return send(res, 201, { data: embedEmployee(rec, token) });
+        }
+        const found = store.employees.find((e) => e.id === idParam);
+        if (!found || store.deleted.employees.has(found.id)) return send(res, 404, { message: "Not found." });
+        Object.assign(found, body);
+        return send(res, 200, { data: embedEmployee(found, token) });
+      }
+      const errors = validateOrgEntity(body, items.filter((d) => !deletedSet.has(d.id)), req.method === "PUT" ? idParam : null);
+      if (Object.keys(errors).length > 0) return send(res, 422, laravel422(errors));
+      if (req.method === "POST") {
+        const id = Math.max(0, ...items.map((d) => d.id)) + 1;
+        const rec = {
+          id, uuid: `${kind === "departments" ? "dep" : "job"}-uuid-${String(id).padStart(4, "0")}`,
+          name: body.name, description: body.description ?? null, is_active: body.is_active ?? true,
+        };
+        items.push(rec);
+        return send(res, 201, { data: rec });
+      }
+      const found = items.find((d) => d.id === idParam);
+      if (!found || deletedSet.has(found.id)) return send(res, 404, { message: "Not found." });
+      if (req.method === "PUT") {
+        Object.assign(found, body);
+        return send(res, 200, { data: found });
+      }
+      return send(res, 405, { message: "Method not allowed." });
+    });
+  }
+  if (req.method === "GET" && ["/api/v1/departments", "/api/v1/job-titles", "/api/v1/employees", "/api/v1/leave-requests", "/api/v1/permission-requests"].includes(url.pathname)) {
+    const knownToken = isKnownToken(token);
     if (!knownToken || revoked) {
       return send(res, 401, { message: "Unauthenticated." });
     }
@@ -481,7 +781,7 @@ const server = createServer((req, res) => {
         ],
       });
     }
-    if (token === DEMO.baddeptfieldsToken && url.pathname === "/api/v1/departments") {
+    if (token === DEMO.baddeptfieldsToken && (url.pathname === "/api/v1/departments" || url.pathname === "/api/v1/job-titles")) {
       return send(res, 200, {
         data: [{ id: 91, uuid: "dep-bad-0001", name: "Bad Dept", description: null, is_active: "yes" }],
       });
@@ -521,10 +821,32 @@ const server = createServer((req, res) => {
       return send(res, 200, { data: [] });
     }
     if (url.pathname === "/api/v1/departments") {
-      return send(res, 200, { data: FIXTURES.departments });
+      let rows = store.departments.filter((d) => !store.deleted.departments.has(d.id));
+      const act = url.searchParams.get("is_active");
+      if (act === "1" || act === "0") rows = rows.filter((d) => d.is_active === (act === "1"));
+      return send(res, 200, { data: rows });
+    }
+    if (url.pathname === "/api/v1/job-titles") {
+      let rows = store.jobTitles.filter((j) => !store.deleted.jobTitles.has(j.id));
+      const act = url.searchParams.get("is_active");
+      if (act === "1" || act === "0") rows = rows.filter((j) => j.is_active === (act === "1"));
+      return send(res, 200, { data: rows });
     }
     if (url.pathname === "/api/v1/employees") {
-      return send(res, 200, { data: FIXTURES.employees });
+      let rows = store.employees.filter((e) => !store.deleted.employees.has(e.id));
+      const q = (url.searchParams.get("search") ?? "").toLowerCase();
+      if (q) {
+        rows = rows.filter((e) =>
+          [e.first_name, e.last_name, e.employee_number, e.email].some((v) =>
+            typeof v === "string" && v.toLowerCase().includes(q)));
+      }
+      for (const f of ["department_id", "job_title_id", "manager_id", "employment_status"]) {
+        const v = url.searchParams.get(f);
+        if (v !== null && v !== "") {
+          rows = rows.filter((e) => String(e[f]) === v);
+        }
+      }
+      return send(res, 200, { data: rows.map((e) => embedEmployee(e, token)) });
     }
     if (url.pathname === "/api/v1/leave-requests") {
       return send(res, 200, paginated(LEAVE_REQUESTS, url));

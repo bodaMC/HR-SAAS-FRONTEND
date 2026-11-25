@@ -14,6 +14,7 @@ import "server-only";
  * name) is treated as unavailable, so malformed identity data can never
  * reach the render tree and crash it.
  */
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { fetchMe, type ApiResult } from "@/lib/server/api";
 import { SESSION_COOKIE } from "@/lib/server/session";
@@ -46,7 +47,14 @@ function validCompanyShape(c: unknown): c is ApiCompany | null {
   return true;
 }
 
-export async function requireSession(): Promise<SessionGuard> {
+/**
+ * Request-scoped memoization (React cache): the protected layout and the page
+ * both call this during ONE render pass, which used to issue GET /auth/me
+ * twice. cache() is scoped to the current request only, so the result is
+ * never shared between users or requests. Security is unchanged: every
+ * request still validates the token against /auth/me.
+ */
+export const requireSession = cache(async function requireSessionUncached(): Promise<SessionGuard> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return { ok: false, reason: "no-token" };
 
@@ -80,4 +88,4 @@ export async function requireSession(): Promise<SessionGuard> {
     return { ok: false, reason: "inactive" };
   }
   return { ok: true, token, user, company };
-}
+});

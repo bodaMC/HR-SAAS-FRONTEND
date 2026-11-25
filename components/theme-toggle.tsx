@@ -1,31 +1,9 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
 import { useI18n } from "@/lib/i18n/client";
-
-type ThemeChoice = "light" | "system" | "dark";
-
-// Existing storage key, kept unchanged for backward compatibility.
-const STORAGE_KEY = "orbit-theme";
-
-function applyTheme(choice: ThemeChoice) {
-  const dark =
-    choice === "dark" ||
-    (choice === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.classList.toggle("dark", dark);
-}
-
-function readChoice(): ThemeChoice {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "light" || stored === "dark") return stored;
-  } catch {
-    // storage unavailable
-  }
-  return "system";
-}
+import { readTheme, setTheme, subscribeTheme, type ThemeChoice } from "@/lib/theme-store";
 
 const OPTIONS: { value: ThemeChoice; labelKey: string; icon: LucideIcon }[] = [
   { value: "light", labelKey: "theme.light", icon: Sun },
@@ -33,37 +11,10 @@ const OPTIONS: { value: ThemeChoice; labelKey: string; icon: LucideIcon }[] = [
   { value: "dark", labelKey: "theme.dark", icon: Moon },
 ];
 
-function subscribe(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  window.addEventListener("orbit-theme-change", onChange);
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener("orbit-theme-change", onChange);
-  };
-}
-
 export function ThemeToggle() {
   const { t } = useI18n();
-  const choice = useSyncExternalStore(subscribe, readChoice, () => "system" as ThemeChoice);
-
-  useEffect(() => {
-    if (choice !== "system") return;
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => applyTheme("system");
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, [choice]);
-
-  function select(next: ThemeChoice) {
-    try {
-      if (next === "system") localStorage.removeItem(STORAGE_KEY);
-      else localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // storage unavailable
-    }
-    applyTheme(next);
-    window.dispatchEvent(new Event("orbit-theme-change"));
-  }
+  const choice = useSyncExternalStore(subscribeTheme, readTheme, () => "system" as ThemeChoice);
+  const select = (next: ThemeChoice) => setTheme(next);
 
   return (
     <div

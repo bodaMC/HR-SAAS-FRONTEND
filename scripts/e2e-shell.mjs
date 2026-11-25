@@ -9,6 +9,7 @@
  *   node scripts/e2e-shell.mjs
  *
  * Covers: protected nav rendering, planned (non-link, badged) items,
+ * the Phase 3 active module links (Employees, Departments, Job Titles),
  * per-item role gating, fail-closed nav for unknown roles, sidebar
  * collapse + persistence, mobile drawer (dialog semantics, focus trap,
  * inert background, no horizontal overflow at 320/390), theme persistence,
@@ -139,12 +140,42 @@ try {
   check('Organization section visible', await sidebar.getByText('Organization', { exact: true }).isVisible());
   check('Dashboard link is active', (await sidebar.getByRole('link', { name: /Dashboard/ }).getAttribute('aria-current')) === 'page');
   const plannedBadges = await sidebar.getByText('Soon').count();
-  check('endpoint-backed modules carry Soon badge', plannedBadges === 11, `badges=${plannedBadges}`);
+  check('endpoint-backed modules carry Soon badge', plannedBadges === 8, `badges=${plannedBadges}`);
   const roadmapBadges = await sidebar.getByText('Roadmap').count();
   check('no-endpoint modules carry Roadmap badge', roadmapBadges === 4, `badges=${roadmapBadges}`);
   const plannedLinkCount = await sidebar.getByRole('link').count();
-  check('only active items are links', plannedLinkCount === 1, `links=${plannedLinkCount}`);
+  check('only active items are links', plannedLinkCount === 4, `links=${plannedLinkCount}`);
   check('no Super Admin entry', await sidebar.getByText(/super\s*admin/i).count() === 0);
+
+  // ---- 2b. Nav active state on nested routes (Phase 3 visual review) ----
+  const empLink = sidebar.getByRole('link', { name: 'Employees' });
+  const dashLink = sidebar.getByRole('link', { name: /Dashboard/ });
+  await page.goto(BASE + '/employees', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle');
+  check('Employees active on directory', (await empLink.getAttribute('aria-current')) === 'page');
+  check('Dashboard not active on directory', (await dashLink.getAttribute('aria-current')) === null);
+  await page.goto(BASE + '/employees/new', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle');
+  check('Employees active on nested new route', (await empLink.getAttribute('aria-current')) === 'page');
+  await page.goto(BASE + '/employees/1', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle');
+  check('Employees active on nested profile route', (await empLink.getAttribute('aria-current')) === 'page');
+  await page.goto(BASE + '/employees/1/edit', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle');
+  check('Employees active on nested edit route', (await empLink.getAttribute('aria-current')) === 'page');
+  await page.goto(BASE + '/job-titles', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle');
+  check('Job Titles active on its route', (await sidebar.getByRole('link', { name: 'Job Titles' }).getAttribute('aria-current')) === 'page');
+  check('Employees not active on job-titles', (await empLink.getAttribute('aria-current')) === null);
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle');
+  await page.getByTestId('welcome-name').waitFor({ state: 'visible' });
+  check('Dashboard active again at root', (await dashLink.getAttribute('aria-current')) === 'page');
+  // Sidebar labels wrap instead of truncating: nothing horizontally clipped.
+  const clippedLabels = await sidebar.evaluate((el) =>
+    Array.from(el.querySelectorAll('a span, li span')).filter((s) => s.scrollWidth > s.clientWidth + 1).length,
+  );
+  check('no horizontally clipped sidebar labels', clippedLabels === 0, `clipped=${clippedLabels}`);
   await page.mouse.move(5, 5);
   await shot(page, '10-dashboard-desktop-light-owner');
 

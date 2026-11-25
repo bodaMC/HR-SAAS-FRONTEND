@@ -201,6 +201,10 @@ try {
   check('AR KPI title', await page.getByText('الموظفون', { exact: true }).first().isVisible());
   check('AR sidebar section label', await page.getByTestId('sidebar').getByText('المؤسسة', { exact: true }).isVisible());
   check('AR company name in sidebar', await page.getByTestId('sidebar').getByText('Demo Engineering Consultancy').isVisible());
+  // Phase 3 visual review: updated Arabic terminology, product name preserved
+  check('AR roadmap badge uses قيد التخطيط', (await page.getByTestId('sidebar').getByText('قيد التخطيط', { exact: true }).count()) === 4);
+  check('AR compensatory time label updated', await page.getByTestId('sidebar').getByText('الساعات التعويضية', { exact: true }).isVisible());
+  check('AR product name كونيور preserved in sidebar', (await page.getByTestId('sidebar').getByText('كونيور', { exact: true }).count()) >= 1);
 
   // ---- 6. Sidebar geometry in RTL ----
   const sidebarBox = await page.getByTestId('sidebar').boundingBox();

@@ -11,6 +11,7 @@ import type {
   ApiEmployee,
   ApiLeaveRequest,
   ApiPermissionRequest,
+  ApiJobTitle,
   Collection,
   LoginSuccess,
   MeResponse,
@@ -82,14 +83,78 @@ export function logoutRemote(
   });
 }
 
-export function fetchDepartments(token: string): Promise<ApiResult<Collection<ApiDepartment>>> {
-  return request<Collection<ApiDepartment>>("/departments", {
+export function fetchDepartments(
+  token: string,
+  query = "",
+): Promise<ApiResult<Collection<ApiDepartment>>> {
+  return request<Collection<ApiDepartment>>(`/departments${query}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
 }
 
-export function fetchEmployees(token: string): Promise<ApiResult<Collection<ApiEmployee>>> {
-  return request<Collection<ApiEmployee>>("/employees", {
+export function fetchJobTitles(
+  token: string,
+  query = "",
+): Promise<ApiResult<Collection<ApiJobTitle>>> {
+  return request<Collection<ApiJobTitle>>(`/job-titles${query}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+export function fetchDepartment(
+  token: string,
+  id: string,
+): Promise<ApiResult<{ data: ApiDepartment }>> {
+  return request<{ data: ApiDepartment }>(`/departments/${id}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+export function fetchJobTitle(
+  token: string,
+  id: string,
+): Promise<ApiResult<{ data: ApiJobTitle }>> {
+  return request<{ data: ApiJobTitle }>(`/job-titles/${id}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+export function fetchEmployee(
+  token: string,
+  id: string,
+): Promise<ApiResult<{ data: ApiEmployee }>> {
+  return request<{ data: ApiEmployee }>(`/employees/${id}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+/**
+ * Same-origin BFF mutation helper. Only the form-request-validated fields
+ * are ever serialized (callers pass the typed input objects), and the
+ * session token never leaves the server.
+ */
+export function mutateApi<T>(
+  token: string,
+  method: "POST" | "PUT" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<ApiResult<T>> {
+  return request<T>(path, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+}
+
+export function fetchEmployees(
+  token: string,
+  query = "",
+): Promise<ApiResult<Collection<ApiEmployee>>> {
+  return request<Collection<ApiEmployee>>(`/employees${query}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
 }
