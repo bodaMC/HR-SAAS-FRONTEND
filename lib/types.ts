@@ -22,6 +22,8 @@ export interface ApiUser {
   created_at: string | null;
   updated_at: string | null;
   company?: ApiCompany | null;
+  /** Phase 3.3: true for a new account or after an admin reset; the backend blocks everything but change-password. */
+  must_change_password?: boolean;
 }
 
 export interface LoginSuccess {
@@ -100,11 +102,17 @@ export interface ApiEmployee {
   department_id: number | null;
   job_title_id: number | null;
   manager_id: number | null;
-  user_id: number | null;
+  /** Phase 3.3: client-controlled user_id is gone; the API only reports whether a login account is linked. */
+  has_account: boolean;
+  /** True when this record is the signed-in user's own: employee CRUD on it is refused (self-service covers phone and picture). */
+  is_self?: boolean;
+  employment_type: "full_time" | "part_time" | "contract" | null;
+  is_trainee: boolean;
+  has_picture: boolean;
+  picture_version: number | null;
   department?: ApiDepartment | null;
   job_title?: ApiJobTitle | null;
   manager?: ApiManagerRef | null;
-  user?: ApiUserRef | null;
   /* Personal data is conditionally PRESENT per record, gated server-side by
    * the viewPersonalData policy (mergeWhen in EmployeeResource). Absence
    * means "not permitted for the caller", never "no value". */
@@ -145,7 +153,8 @@ export interface EmployeeInput {
   department_id?: number | null;
   job_title_id?: number | null;
   manager_id?: number | null;
-  user_id?: number | null;
+  employment_type?: string | null;
+  is_trainee?: boolean;
 }
 
 export interface ApiLeaveType {
@@ -227,4 +236,28 @@ export interface ApiAccessUser {
   legacy_role: string | null;
   roles: { id: number; key: string; name: string; name_ar?: string | null; is_system: boolean }[];
   effective_permissions?: string[];
+}
+
+/** Phase 3.3 login-account state of one employee (GET /employees/{id}/account). */
+export type AccountStateName = "no_login" | "active" | "password_change_required" | "inactive" | "protected";
+export interface ApiLinkCandidate { id: number; name: string; email: string; is_active: boolean }
+export interface ApiAccountState {
+  employee_id: number;
+  employee_uuid: string;
+  has_account: boolean;
+  is_self?: boolean;
+  state: AccountStateName;
+  login_email?: string;
+  actions: { create: boolean; link: boolean; reset_password: boolean; deactivate: boolean; reactivate: boolean; unlink: boolean };
+}
+
+/** GET /me/profile: the signed-in employee's own record (phone and picture are the only editable parts). */
+export interface ApiOwnProfile {
+  user: ApiUser;
+  has_employee: boolean;
+  editable_fields: string[];
+  employee: {
+    id: number; employee_number: string; first_name: string; last_name: string; department: string | null; job_title: string | null;
+    employment_status: string; employment_type: "full_time" | "part_time" | "contract" | null; is_trainee: boolean; hire_date: string | null; work_email: string | null; phone: string | null; has_picture: boolean; picture_version: number | null;
+  } | null;
 }

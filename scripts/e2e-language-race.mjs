@@ -13,7 +13,7 @@ const BASE = 'http://127.0.0.1:3000', PW = 'Str0ng!Pass#2026', ROUNDS = Number(p
 const browser = await chromium.launch(); const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await ctx.newPage();
 await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' }); await page.waitForLoadState('networkidle');
-await page.getByLabel('Work email').fill('owner.a@e2e.test'); await page.getByLabel('Password', { exact: true }).fill(PW);
+await page.getByLabel('Work email').fill('hr1.a@e2e.test'); await page.getByLabel('Password', { exact: true }).fill(PW);
 await page.getByRole('button', { name: 'Sign in' }).click(); await page.waitForURL((u) => !u.pathname.startsWith('/login'));
 await page.getByTestId('welcome-name').waitFor({ state: 'visible' });
 const cookie = async () => (await ctx.cookies()).find((c) => c.name === COOKIE)?.value ?? null;

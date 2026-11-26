@@ -183,3 +183,52 @@ export function fetchAccess<T>(token: string, path: string): Promise<ApiResult<T
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
 }
+
+/** Phase 3.3: login-account state of one employee (permission-gated by Laravel). */
+export function fetchAccountState(token: string, employeeId: string): Promise<ApiResult<{ data: unknown }>> {
+  return request<{ data: unknown }>(`/employees/${employeeId}/account`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+/** Phase 3.3 FINAL-V2: minimal Link picker data (id, name, email, active) for accounts this caller may link. */
+export function fetchLinkCandidates(token: string, employeeId: string, q: string): Promise<ApiResult<{ data: unknown }>> {
+  return request<{ data: unknown }>(`/employees/${employeeId}/account/link-candidates${q ? `?q=${encodeURIComponent(q)}` : ""}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+/** Phase 3.3: the signed-in user's own profile. */
+export function fetchOwnProfile(token: string): Promise<ApiResult<{ data: unknown }>> {
+  return request<{ data: unknown }>("/me/profile", {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+}
+
+/** Phase 3.3: multipart picture upload (the browser never talks to Laravel directly). */
+export function uploadPicture(token: string, file: Blob, filename: string): Promise<ApiResult<{ data: unknown }>> {
+  const form = new FormData();
+  form.set("picture", file, filename);
+  return request<{ data: unknown }>("/me/profile/picture", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    body: form,
+  });
+}
+
+/** Phase 3.3: binary picture proxy. Returns null on any failure. */
+export async function fetchPictureBytes(token: string, path: string): Promise<{ bytes: ArrayBuffer; type: string } | null> {
+  try {
+    const res = await fetch(`${baseUrl()}${path}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "image/*" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return null;
+    const type = res.headers.get("content-type") ?? "";
+    if (!/^image\/(jpeg|png|webp)$/.test(type.split(";")[0].trim())) return null;
+    return { bytes: await res.arrayBuffer(), type: type.split(";")[0].trim() };
+  } catch {
+    return null;
+  }
+}

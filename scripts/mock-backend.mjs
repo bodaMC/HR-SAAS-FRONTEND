@@ -259,9 +259,12 @@ const HR_PERMS = [
   "departments.view", "departments.create", "departments.update", "departments.delete",
   "job_titles.view", "job_titles.create", "job_titles.update", "job_titles.delete",
   "roles.view", "roles.create", "roles.update", "roles.delete", "roles.assign", "permissions.view", "permissions.manage",
+  "accounts.view", "accounts.create", "accounts.link", "accounts.activate", "accounts.deactivate", "accounts.reset_password",
 ];
+// Phase 3.3 (SIMULATED matrix): HR holds operational permissions only, never roles.* / permissions.*.
+const HR_OPS = [...HR_PERMS.filter((p) => !p.startsWith("roles.") && !p.startsWith("permissions.")), "work_schedules.manage", "company_settings.manage", "approval_workflows.manage", "audit_logs.view_operational"];
 // FINAL-V3: the legacy Owner/Admin account types hold NO implicit permission (no fallback).
-const PROTECTED_PERMS = ["audit_logs.view", "company_settings.manage", "work_schedules.manage"];
+const PROTECTED_PERMS = ["audit_logs.view", "company_settings.manage", "work_schedules.manage", "approval_workflows.manage"];
 const HR_DELEGATES = HR_PERMS.filter((p) => !["roles.create", "roles.update", "roles.delete", "roles.assign", "permissions.manage"].includes(p));
 function permsFor(token) {
   if (token === DEMO.employeeToken || token === DEMO.managerToken || token === DEMO.unknownroleToken) return [];
@@ -269,12 +272,12 @@ function permsFor(token) {
   if (token === DEMO.sysadminToken) return [...HR_PERMS, ...PROTECTED_PERMS].sort();
   if (token === DEMO.viewonlyToken) return ["employees.view", "departments.view", "job_titles.view"];
   if (token === DEMO.platformToken) return [];
-  if (token === DEMO.hrToken) return HR_PERMS;
+  if (token === DEMO.hrToken) return HR_OPS;
   if (token === DEMO.cronlyToken) return ["departments.view", "departments.create", "roles.view", "roles.create", "permissions.view"];
   if (token === DEMO.uponlyToken) return ["departments.view", "departments.update", "roles.view", "roles.update", "permissions.view"];
   if (token === DEMO.delonlyToken) return ["departments.view", "departments.delete", "roles.view", "roles.delete", "permissions.view"];
   // The default demo owner models an Owner bootstrapped as HR Administrator: exactly the role's permissions (no implicit protected administration).
-  return HR_PERMS;
+  return HR_OPS;
 }
 const can = (token, p) => permsFor(token).includes(p);
 const SSA_ROLE = { id: 3, key: "system_super_admin", name: "System Super Admin", name_ar: "مدير النظام الأعلى", is_system: true };
@@ -417,15 +420,20 @@ function embedEmployee(emp, token) {
   const dep = store.departments.find((d) => d.id === emp.department_id && !store.deleted.departments.has(d.id));
   const job = store.jobTitles.find((j) => j.id === emp.job_title_id && !store.deleted.jobTitles.has(j.id));
   const mgr = store.employees.find((m) => m.id === emp.manager_id && !store.deleted.employees.has(m.id));
-  const usr = FIXTURES.users.find((u) => u.id === emp.user_id);
+  const { user_id: linkedUserId, ...empPublic } = emp; // Phase 3.3: user_id is never exposed
   const out = {
-    ...emp,
+    ...empPublic,
+    has_account: linkedUserId != null,
+    is_self: emp.id === 1 && token === DEMO.token,
+    employment_type: emp.employment_type ?? null,
+    is_trainee: emp.is_trainee ?? false,
+    has_picture: false,
+    picture_version: null,
     department: dep ?? null,
     job_title: job ?? null,
     manager: mgr
       ? { id: mgr.id, uuid: mgr.uuid, employee_number: mgr.employee_number, first_name: mgr.first_name, last_name: mgr.last_name, email: mgr.email }
       : null,
-    user: usr ?? null,
   };
   /* viewPersonalData policy (verified): owner/admin see personal data on
    * every record; an employee sees only their own record's; a manager
@@ -742,6 +750,96 @@ const server = createServer((req, res) => {
       access: { permissions: permsFor(token), roles: meRoles(token), is_platform_admin: token === DEMO.platformToken },
     });
   }
+  /* Phase 3.3 own profile (SIMULATED). Demo employee token = employee id 2. */
+  if (url.pathname.startsWith("/api/v1/me/profile")) {
+    if (!isKnownToken(token) || revoked) return send(res, 401, { message: "Unauthenticated." });
+    const me = token === DEMO.employeeToken ? store.employees.find((e) => e.id === 2) : null;
+    const usr = token === DEMO.employeeToken ? DEMO.employeeUser : DEMO.user;
+    store.pictures ??= {};
+    const body = () => ({ data: { user: usr, has_employee: !!me, editable_fields: ["phone"], employee: me ? {
+      id: me.id, employee_number: me.employee_number, first_name: me.first_name, last_name: me.last_name,
+      department: store.departments.find((d) => d.id === me.department_id)?.name ?? null, job_title: store.jobTitles.find((j) => j.id === me.job_title_id)?.name ?? null,
+      employment_status: me.employment_status, employment_type: me.employment_type ?? null, is_trainee: me.is_trainee ?? false, hire_date: me.hire_date ?? null, work_email: me.email, phone: me.phone ?? null, has_picture: !!store.pictures[me.id], picture_version: store.pictures[me.id] ?? null } : null } });
+    if (url.pathname === "/api/v1/me/profile" && req.method === "GET") return send(res, 200, body());
+    if (!me) return send(res, 404, { message: "No employee record." });
+    if (url.pathname === "/api/v1/me/profile" && req.method === "PUT") {
+      return readBody(req).then((b) => {
+        if (!b || typeof b !== "object") return send(res, 400, { message: "Invalid JSON." });
+        const extra = Object.keys(b).filter((k) => k !== "phone");
+        if (extra.length) return send(res, 422, laravel422({ [extra[0]]: ["This field cannot be changed."] }));
+        me.phone = b.phone ?? null;
+        return send(res, 200, body());
+      });
+    }
+    if (url.pathname === "/api/v1/me/profile/picture" && req.method === "POST") { store.pictures[me.id] = (store.pictures[me.id] ?? 0) + 1; return send(res, 200, body()); }
+    if (url.pathname === "/api/v1/me/profile/picture" && req.method === "DELETE") { delete store.pictures[me.id]; return send(res, 200, body()); }
+    if (url.pathname === "/api/v1/me/profile/picture" && req.method === "GET") {
+      if (!store.pictures[me.id]) return send(res, 404, { message: "No picture." });
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+      res.writeHead(200, { "Content-Type": "image/png", "Content-Length": png.length }); return res.end(png);
+    }
+    return send(res, 404, { message: "Not found." });
+  }
+  /* Phase 3.3 account lifecycle (SIMULATED contract; real behaviour is proven on Laravel/PostgreSQL). */
+  store.linkPool ??= [{ id: 501, name: "Free Account One", email: "free.one@mock.test", is_active: true }, { id: 502, name: "Free Account Two", email: "free.two@mock.test", is_active: false }];
+  const cand = url.pathname.match(/^\/api\/v1\/employees\/(\d+)\/account\/link-candidates$/);
+  if (cand && req.method === "GET") {
+    if (!isKnownToken(token) || revoked) return send(res, 401, { message: "Unauthenticated." });
+    if (!can(token, "accounts.link")) return send(res, 403, { message: "This action is unauthorized." });
+    const q = (url.searchParams.get("q") ?? "").toLowerCase();
+    return send(res, 200, { data: store.linkPool.filter((c) => !q || c.email.includes(q) || c.name.toLowerCase().includes(q)) });
+  }
+  const acct = url.pathname.match(/^\/api\/v1\/employees\/(\d+)\/(account|terminate|reactivate)(?:\/([a-z-]+))?$/);
+  if (acct) {
+    if (!isKnownToken(token) || revoked) return send(res, 401, { message: "Unauthenticated." });
+    const emp = store.employees.find((e) => e.id === Number(acct[1]) && !store.deleted.employees.has(e.id));
+    if (!emp) return send(res, 404, { message: "Not found." });
+    store.accountStates ??= {};
+    store.accountStates[emp.id] ??= emp.user_id != null ? "active" : "no_login";
+    const stateBody = () => {
+      const s2 = store.accountStates[emp.id];
+      const self = emp.id === 1 && token === DEMO.token;
+      if (self) return { data: { state: s2, employee_uuid: emp.uuid, is_self: true, login_email: emp.email, actions: { create: false, link: false, unlink: false, reset_password: false, deactivate: false, reactivate: false } } };
+      return { data: { state: s2, employee_uuid: emp.uuid, is_self: false, login_email: s2 === "no_login" ? null : emp.email, actions: {
+        create: s2 === "no_login" && emp.employment_status !== "terminated", link: s2 === "no_login" && emp.employment_status !== "terminated", unlink: s2 !== "no_login",
+        reset_password: s2 === "active" || s2 === "password_change_required", deactivate: s2 === "active" || s2 === "password_change_required", reactivate: s2 === "inactive" && emp.employment_status !== "terminated" } } };
+    };
+    const kindOf = acct[2], act = acct[3];
+    const need = kindOf === "account" && !act && req.method === "GET" ? "accounts.view"
+      : kindOf === "account" && act === "reset-password" ? "accounts.reset_password"
+      : kindOf === "account" && act === "deactivate" ? "accounts.deactivate"
+      : kindOf === "account" && act === "reactivate" ? "accounts.activate"
+      : kindOf === "account" && (act === "link" || act === "unlink") ? "accounts.link"
+      : kindOf === "account" ? "accounts.create" : "employees.update";
+    if (!can(token, need)) return send(res, 403, { message: "This action is unauthorized." });
+    if (req.method === "GET") return send(res, 200, stateBody());
+    return readBody(req).then((b) => {
+      if (!b || typeof b !== "object") return send(res, 400, { message: "Invalid JSON." });
+      if (act || kindOf !== "account") {
+        if (b.confirm_employee_uuid !== emp.uuid) return send(res, 422, laravel422({ confirm_employee_uuid: ["The confirmation does not match this employee."] }));
+        if (!(typeof b.reason === "string" && b.reason.length >= 10)) return send(res, 422, laravel422({ reason: ["The reason field must be at least 10 characters."] }));
+      }
+      const TEMP = "Tmp-MOCK-Pass-9x!";
+      if (kindOf === "account" && !act) { store.accountStates[emp.id] = "password_change_required"; emp.user_id = 900 + emp.id; return send(res, 201, { ...stateBody(), temporary_password: TEMP }); }
+      if (act === "reset-password") { store.accountStates[emp.id] = "password_change_required"; return send(res, 200, { ...stateBody(), temporary_password: TEMP }); }
+      if (act === "deactivate") { store.accountStates[emp.id] = "inactive"; return send(res, 200, stateBody()); }
+      if (act === "reactivate") { store.accountStates[emp.id] = "active"; return send(res, 200, stateBody()); }
+      if (act === "unlink") {
+        // FINAL-V2: unlink switches the account off; it returns to the pool as inactive and nothing is restored.
+        if (emp.user_id != null && !store.linkPool.some((c) => c.id === emp.user_id)) store.linkPool.push({ id: emp.user_id, name: `${emp.first_name} ${emp.last_name}`.trim(), email: emp.email, is_active: false });
+        store.accountStates[emp.id] = "no_login"; emp.user_id = null; return send(res, 200, stateBody());
+      }
+      if (act === "link") {
+        const c = store.linkPool.find((x) => x.id === b.user_id);
+        if (!c) return send(res, 404, { message: "Not found." });
+        store.linkPool = store.linkPool.filter((x) => x.id !== c.id);
+        emp.user_id = c.id; store.accountStates[emp.id] = "inactive"; return send(res, 200, stateBody());
+      }
+      if (kindOf === "terminate") { emp.employment_status = "terminated"; emp.termination_date = b.termination_date ?? new Date().toISOString().slice(0, 10); if (store.accountStates[emp.id] !== "no_login") store.accountStates[emp.id] = "inactive"; return send(res, 200, { data: embedEmployee(emp, token) }); }
+      if (kindOf === "reactivate") { emp.employment_status = "active"; emp.termination_date = null; return send(res, 200, { data: embedEmployee(emp, token) }); }
+      return send(res, 404, { message: "Not found." });
+    });
+  }
   /* Phase 3.2 access administration (simulated). */
   if (url.pathname.startsWith("/api/v1/access/")) {
     if (!isKnownToken(token) || revoked) return send(res, 401, { message: "Unauthenticated." });
@@ -887,14 +985,16 @@ const server = createServer((req, res) => {
             hire_date: body.hire_date ?? null, termination_date: body.termination_date ?? null,
             employment_status: body.employment_status ?? "active",
             department_id: body.department_id ?? null, job_title_id: body.job_title_id ?? null,
-            manager_id: body.manager_id ?? null, user_id: body.user_id ?? null,
+            manager_id: body.manager_id ?? null, user_id: null,
+            employment_type: body.employment_type ?? null, is_trainee: body.is_trainee ?? false,
           };
           store.employees.push(rec);
           return send(res, 201, { data: embedEmployee(rec, token) });
         }
         const found = store.employees.find((e) => e.id === idParam);
         if (!found || store.deleted.employees.has(found.id)) return send(res, 404, { message: "Not found." });
-        Object.assign(found, body);
+        const safeBody = Object.fromEntries(Object.entries(body).filter(([k]) => k !== "user_id")); // client user_id is ignored by the backend
+        Object.assign(found, safeBody);
         return send(res, 200, { data: embedEmployee(found, token) });
       }
       const errors = validateOrgEntity(body, items.filter((d) => !deletedSet.has(d.id)), req.method === "PUT" ? idParam : null);

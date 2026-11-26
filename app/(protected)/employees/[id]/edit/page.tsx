@@ -69,6 +69,14 @@ export default async function EditEmployeePage({
     );
   }
 
+  if (result.value.is_self) {
+    return (
+      <div className="mx-auto w-full max-w-2xl" data-testid="edit-self-blocked">
+        <Alert message={t("employeeForm.selfEditBlocked")} />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl min-w-0">
       <EmployeeForm

@@ -137,16 +137,17 @@ try {
 
   // ---- 2. Shell nav: owner sees all sections, planned items badged + non-link ----
   const sidebar = page.getByTestId('sidebar');
-  for (const hidden of ['Audit Logs', 'Company Settings', 'Work Schedules', 'Holidays', 'Approval Workflows']) check(`bootstrapped Owner (HR role) does not see ${hidden}`, (await sidebar.getByText(hidden, { exact: true }).count()) === 0);
-  check('bootstrapped Owner sees Roles & Permissions', (await sidebar.getByRole('link', { name: /Roles & Permissions/ }).count()) === 1);
+  // Phase 3.3 (intentional matrix change): HR holds operational permissions, so these five appear as Soon/Roadmap items (no pages built), and HR holds no RBAC so Roles & Permissions is hidden.
+  for (const shown of ['Audit Logs', 'Company Settings', 'Work Schedules', 'Holidays', 'Approval Workflows']) check(`HR sees ${shown} as a non-link roadmap item`, (await sidebar.getByText(shown, { exact: true }).count()) === 1 && (await sidebar.getByRole('link', { name: shown, exact: true }).count()) === 0);
+  check('HR does not see Roles & Permissions', (await sidebar.getByText(/Roles & Permissions/).count()) === 0);
   check('Administration section visible for owner', await sidebar.getByText('Administration', { exact: true }).isVisible());
   check('Organization section visible', await sidebar.getByText('Organization', { exact: true }).isVisible());
   check('Dashboard link is active', (await sidebar.getByRole('link', { name: /Dashboard/ }).getAttribute('aria-current')) === 'page');
   const plannedBadges = await sidebar.getByText('Soon').count();
   // FINAL-V2: a bootstrapped Owner has exactly the HR role: Administration shows Roles & Permissions only (no schedules/holidays/audit/settings).
-  check('endpoint-backed modules carry Soon badge', plannedBadges === 5, `badges=${plannedBadges}`);
+  check('endpoint-backed modules carry Soon badge', plannedBadges === 7, `badges=${plannedBadges}`);
   const roadmapBadges = await sidebar.getByText('Roadmap').count();
-  check('no-endpoint modules carry Roadmap badge', roadmapBadges === 2, `badges=${roadmapBadges}`);
+  check('no-endpoint modules carry Roadmap badge', roadmapBadges === 4, `badges=${roadmapBadges}`);
   const plannedLinkCount = await sidebar.getByRole('link').count();
   // Phase 3.2 (intentional change): 4 -> 5 links, Roles & Permissions is a new active Administration module.
   check('only active items are links', plannedLinkCount === 5, `links=${plannedLinkCount}`);

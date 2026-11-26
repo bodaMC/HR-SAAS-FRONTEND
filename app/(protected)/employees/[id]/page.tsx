@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { fetchEmployee, fetchEmployees } from "@/lib/server/api";
+import { fetchAccountState, fetchEmployee, fetchEmployees } from "@/lib/server/api";
 import { can } from "@/lib/access";
 import { RestrictedPage } from "@/components/restricted-page";
 import { requireSession } from "@/lib/server/guard";
@@ -11,8 +11,10 @@ import { ClearSession } from "@/components/clear-session";
 import { Alert } from "@/components/ui/alert";
 import { StatusPill } from "@/components/org/pill";
 import { EmployeeActions } from "@/components/org/employee-actions";
+import { AccountPanel } from "@/components/account/account-panel";
+import { Avatar } from "@/components/account/avatar";
 import { MaskedValue } from "@/components/org/masked-value";
-import type { ApiEmployee } from "@/lib/types";
+import type { AccountStateName, ApiAccountState, ApiEmployee } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,10 @@ export default async function EmployeeProfilePage({
     }
     const st = src.get("employment_status");
     if (st && ["active", "on_leave", "suspended", "terminated"].includes(st)) out.set("employment_status", st);
+    for (const [k, allowed] of [["scope", ["former", "all"]], ["employment_type", ["full_time", "part_time", "contract", "none"]], ["is_trainee", ["0", "1"]]] as const) {
+      const v = src.get(k);
+      if (v && (allowed as readonly string[]).includes(v)) out.set(k, v);
+    }
     return out.size > 0 ? `?${out.toString()}` : "";
   })();
   if (!/^\d+$/.test(id)) notFound();
@@ -75,6 +81,13 @@ export default async function EmployeeProfilePage({
   const result = validSingle<ApiEmployee>(rawEmployee, validEmployeeRecord);
   if (result && "notFound" in result) notFound();
 
+  const accountRes = result !== null && !("notFound" in result) && can(session.caps, "accounts.view") ? await fetchAccountState(session.token, id) : null;
+  const accountRaw = accountRes && accountRes.ok ? (accountRes.data?.data as Record<string, unknown> | undefined) : undefined;
+  const ACCOUNT_STATES: readonly string[] = ["no_login", "active", "password_change_required", "inactive", "protected"];
+  const accountState: ApiAccountState | null =
+    accountRaw && typeof accountRaw.state === "string" && ACCOUNT_STATES.includes(accountRaw.state) && typeof accountRaw.employee_uuid === "string" && typeof accountRaw.actions === "object" && accountRaw.actions !== null
+      ? ({ ...(accountRaw as unknown as ApiAccountState), state: accountRaw.state as AccountStateName })
+      : null;
   const canManage = can(session.caps, "employees.update") || can(session.caps, "employees.delete");
   const reports =
     result !== null && can(session.caps, "employees.view")
@@ -143,9 +156,13 @@ export default async function EmployeeProfilePage({
     { label: t("employeeForm.terminationDate"), value: date(e.termination_date), ltr: true },
     {
       label: t("profile.linkedAccount"),
-      value: e.user ? `${e.user.name} (${e.user.email})` : t("profile.notLinked"),
-      ltr: true,
+      value: e.has_account ? t("profile.yes") : t("profile.notLinked"),
     },
+    {
+      label: t("profile.employmentType"),
+      value: e.employment_type ? t(`employeeForm.employmentTypes.${e.employment_type}`) : t("employeeForm.employmentTypes.none"),
+    },
+    { label: t("profile.trainee"), value: e.is_trainee ? t("profile.yes") : t("profile.no") },
   ];
 
   return (
@@ -155,10 +172,11 @@ export default async function EmployeeProfilePage({
       </Link>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
+          <Avatar src={e.has_picture ? `/api/employees/${e.id}/picture?v=${e.picture_version ?? 0}` : null} name={name} size={56} />
           <h1 className="text-xl font-bold text-foreground">{name}</h1>
           <StatusPill status={e.employment_status} label={statusLabel} />
         </div>
-        {canManage ? <EmployeeActions id={e.id} name={name} /> : null}
+        {canManage && accountState?.state !== "protected" && !e.is_self ? <EmployeeActions id={e.id} name={name} /> : null}
       </div>
 
       <section className="mt-6 rounded-xl border border-border bg-surface p-5">
@@ -176,6 +194,18 @@ export default async function EmployeeProfilePage({
           ))}
         </dl>
       </section>
+
+      {accountState ? (
+        <AccountPanel
+          employeeId={e.id}
+          name={name}
+          defaultEmail={e.email ?? ""}
+          state={accountState}
+          employmentStatus={e.employment_status}
+          canTerminate={can(session.caps, "employees.update") && accountState.state !== "protected" && !e.is_self}
+          isSelf={e.is_self === true}
+        />
+      ) : null}
 
       <section className="mt-6 rounded-xl border border-border bg-surface p-5">
         <h2 className="text-xs font-semibold tracking-wider text-foreground-muted uppercase">

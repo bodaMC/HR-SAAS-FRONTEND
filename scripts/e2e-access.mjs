@@ -1,6 +1,6 @@
 /**
  * Phase 3.2 Roles & Permissions usability/performance with a LARGE registry (SIMULATED backend, MOCK_LARGE_REGISTRY=120 -> 4 groups x 120 extra
- * permissions + 300 users + 60 roles). Needs the production app on :3000 pointed at the mock on :4100. Persona: hr@orbit.example.
+ * permissions + 300 users + 60 roles). Needs the production app on :3000 pointed at the mock on :4100. Persona: sysadmin@orbit.example (Phase 3.3: HR no longer holds roles.*, so the RBAC persona is the System Super Admin).
  * Measures wall time (ms) for render/search/open-editor; asserts the page stays responsive and usable (search narrows, editor scrolls inside the viewport, no horizontal overflow).
  */
 import { chromium } from 'playwright';
@@ -9,7 +9,7 @@ let pass = 0, fail = 0; const check = (n, ok, d = '') => { if (ok) pass++; else 
 const browser = await chromium.launch(); const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(BASE + '/login', { waitUntil: 'networkidle' });
-await page.waitForTimeout(1000); await page.getByLabel('Work email').fill('hr@orbit.example'); await page.waitForTimeout(300); await page.getByLabel('Work email').fill('hr@orbit.example'); await page.getByLabel('Password', { exact: true }).fill('orbit-demo-password');
+await page.waitForTimeout(1000); await page.getByLabel('Work email').fill('sysadmin@orbit.example'); await page.waitForTimeout(300); await page.getByLabel('Work email').fill('sysadmin@orbit.example'); await page.getByLabel('Password', { exact: true }).fill('orbit-demo-password');
 await page.getByRole('button', { name: 'Sign in' }).click(); await page.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 15000 }).catch(async () => { console.log('LOGIN STUCK:', (await page.locator('body').innerText()).slice(0, 300)); process.exit(2); });
 let t = Date.now(); await page.goto(BASE + '/access', { waitUntil: 'networkidle' }); await page.getByTestId('access-page').waitFor();
 const loadMs = Date.now() - t; check(`Roles tab loads with 62 roles in ${loadMs} ms (<3000)`, loadMs < 3000 && (await page.locator('[data-testid^="role-open-"]').count()) >= 60);

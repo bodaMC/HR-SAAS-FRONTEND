@@ -61,7 +61,13 @@ export default async function EmployeesPage({
     ? one(sp.employment_status)
     : "";
 
+  const scope = ["former", "all"].includes(one(sp.scope)) ? one(sp.scope) : "";
+  const employmentType = ["full_time", "part_time", "contract", "none"].includes(one(sp.employment_type)) ? one(sp.employment_type) : "";
+  const isTrainee = ["0", "1"].includes(one(sp.is_trainee)) ? one(sp.is_trainee) : "";
   const qs = new URLSearchParams();
+  if (scope) qs.set("scope", scope);
+  if (employmentType) qs.set("employment_type", employmentType);
+  if (isTrainee) qs.set("is_trainee", isTrainee);
   if (search) qs.set("search", search);
   if (departmentId) qs.set("department_id", departmentId);
   if (jobTitleId) qs.set("job_title_id", jobTitleId);
@@ -114,6 +120,9 @@ export default async function EmployeesPage({
           job_title_id: jobTitleId,
           manager_id: managerId,
           employment_status: status,
+          scope,
+          employment_type: employmentType,
+          is_trainee: isTrainee,
         }}
         departments={departments.map((d) => ({ id: String(d.id), name: d.name }))}
         jobTitles={jobTitles.map((j) => ({ id: String(j.id), name: j.name }))}

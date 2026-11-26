@@ -85,7 +85,7 @@ export const NAV_SECTIONS: NavSection[] = [
     labelKey: "workspace",
     items: [
       { labelKey: "dashboard", icon: LayoutDashboard, href: "/", status: "active", badgeKey: "soon" },
-      { labelKey: "myProfile", icon: UserRound, status: "planned", badgeKey: "soon" },
+      { labelKey: "myProfile", icon: UserRound, href: "/profile", status: "active", badgeKey: "soon" },
     ],
   },
   {
@@ -115,8 +115,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { labelKey: "workSchedules", icon: CalendarClock, status: "planned", needs: ["work_schedules.manage"], badgeKey: "soon" },
       { labelKey: "holidays", icon: Palmtree, status: "planned", needs: ["work_schedules.manage"], badgeKey: "soon" },
       { labelKey: "companySettings", icon: Settings, status: "roadmap", needs: ["company_settings.manage"], badgeKey: "roadmap" },
-      { labelKey: "approvalWorkflows", icon: Workflow, status: "roadmap", needs: ["company_settings.manage"], badgeKey: "roadmap" },
-      { labelKey: "auditLogs", icon: ShieldCheck, status: "planned", needs: ["audit_logs.view"], badgeKey: "soon" },
+      { labelKey: "approvalWorkflows", icon: Workflow, status: "roadmap", needs: ["approval_workflows.manage"], badgeKey: "roadmap" },
+      { labelKey: "auditLogs", icon: ShieldCheck, status: "planned", needs: ["audit_logs.view", "audit_logs.view_operational"], badgeKey: "soon" },
       // Platform support is explicit-tenant-context only and not built yet.
       { labelKey: "platformSupport", icon: ShieldCheck, status: "roadmap", platformOnly: true, badgeKey: "roadmap" },
     ],

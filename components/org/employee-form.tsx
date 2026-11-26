@@ -17,7 +17,7 @@ import { failureKey, readFailureCode, type FailureCode } from "@/lib/api-errors"
 import { nationalIdFormatOk, normalizeNationalId } from "@/lib/national-id";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
-import { TextField, SelectField } from "@/components/ui/form-controls";
+import { TextField, SelectField, CheckboxField } from "@/components/ui/form-controls";
 import { Alert } from "@/components/ui/alert";
 import type { ApiDepartment, ApiEmployee } from "@/lib/types";
 
@@ -45,14 +45,18 @@ interface FormState {
   gender: string;
   national_id: string;
   hire_date: string;
-  termination_date: string;
   employment_status: string;
+  employment_type: string;
+  is_trainee: boolean;
   department_id: string;
   job_title_id: string;
   manager_id: string;
 }
 
-const STATUS_VALUES = ["active", "on_leave", "suspended", "terminated"];
+/* Phase 3.3: termination and reactivation are dedicated, audited lifecycle actions (they also move the login
+ * account). The generic form can neither enter nor leave the terminated state. */
+const STATUS_VALUES = ["active", "on_leave", "suspended"];
+const EMPLOYMENT_TYPES = ["full_time", "part_time", "contract"];
 const GENDER_VALUES = ["male", "female"];
 
 function initialFrom(e: ApiEmployee | undefined): FormState {
@@ -66,8 +70,9 @@ function initialFrom(e: ApiEmployee | undefined): FormState {
     gender: GENDER_VALUES.includes(e?.gender ?? "") ? (e?.gender ?? "") : "",
     national_id: e?.national_id ?? "",
     hire_date: e?.hire_date ?? "",
-    termination_date: e?.termination_date ?? "",
     employment_status: e?.employment_status ?? "active",
+    employment_type: e?.employment_type ?? "",
+    is_trainee: e?.is_trainee ?? false,
     department_id: e?.department_id != null ? String(e.department_id) : "",
     job_title_id: e?.job_title_id != null ? String(e.job_title_id) : "",
     manager_id: e?.manager_id != null ? String(e.manager_id) : "",
@@ -148,8 +153,9 @@ export function EmployeeForm({ mode, employee, departments, jobTitles, managers 
         : { gender: form.gender === "" ? null : form.gender }),
       national_id: nid === "" ? null : nid,
       hire_date: form.hire_date === "" ? null : form.hire_date,
-      termination_date: form.termination_date === "" ? null : form.termination_date,
-      employment_status: form.employment_status,
+      ...(mode === "edit" && employee?.employment_status === "terminated" ? {} : { employment_status: form.employment_status }),
+      employment_type: form.employment_type === "" ? null : form.employment_type,
+      is_trainee: form.is_trainee,
       department_id: form.department_id === "" ? null : Number(form.department_id),
       job_title_id: form.job_title_id === "" ? null : Number(form.job_title_id),
       manager_id: form.manager_id === "" ? null : Number(form.manager_id),
@@ -314,12 +320,12 @@ export function EmployeeForm({ mode, employee, departments, jobTitles, managers 
             label={t("employeeForm.employmentStatus")}
             value={form.employment_status}
             onChange={(v) => set("employment_status", v)}
-            options={STATUS_VALUES.map((s) => ({
+            options={(employee?.employment_status === "terminated" ? [...STATUS_VALUES, "terminated"] : STATUS_VALUES).map((s) => ({
               value: s,
               label: t(`employees.statuses.${s}`),
             }))}
             error={fieldError("employment_status")}
-            disabled={pending}
+            disabled={pending || employee?.employment_status === "terminated"}
           />
           <TextField
             id="f-hire-date"
@@ -331,16 +337,24 @@ export function EmployeeForm({ mode, employee, departments, jobTitles, managers 
             disabled={pending}
             dir="ltr"
           />
-          <TextField
-            id="f-termination-date"
-            label={t("employeeForm.terminationDate")}
-            type="date"
-            value={form.termination_date}
-            onChange={(v) => set("termination_date", v)}
-            error={fieldError("termination_date")}
+          <SelectField
+            id="f-employment-type"
+            label={t("employeeForm.employmentType")}
+            value={form.employment_type}
+            onChange={(v) => set("employment_type", v)}
+            options={[{ value: "", label: t("employeeForm.employmentTypes.none") }, ...EMPLOYMENT_TYPES.map((s) => ({ value: s, label: t(`employeeForm.employmentTypes.${s}`) }))]}
+            error={fieldError("employment_type")}
             disabled={pending}
-            dir="ltr"
           />
+          <div className="flex items-end pb-2">
+            <CheckboxField
+              id="f-is-trainee"
+              label={t("employeeForm.isTrainee")}
+              checked={form.is_trainee}
+              onChange={(v) => setForm((f) => ({ ...f, is_trainee: v }))}
+              disabled={pending}
+            />
+          </div>
           <SelectField
             id="f-department"
             label={t("employeeForm.department")}

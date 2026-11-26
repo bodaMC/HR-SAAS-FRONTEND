@@ -224,6 +224,8 @@ const BREADCRUMB_KEYS: Record<string, string> = {
   departments: "nav.items.departments",
   "job-titles": "nav.items.jobTitles",
   access: "nav.items.rolesPermissions",
+  profile: "nav.items.myProfile",
+  password: "password.changeTitle",
   new: "breadcrumb.new",
   edit: "breadcrumb.edit",
 };

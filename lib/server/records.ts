@@ -75,16 +75,6 @@ function validManagerRef(v: unknown): boolean {
   );
 }
 
-function validUserRef(v: unknown): boolean {
-  if (v === null || v === undefined) return true;
-  return (
-    isPlainRecord(v) &&
-    isId(v.id) &&
-    typeof v.name === "string" &&
-    typeof v.email === "string"
-  );
-}
-
 export function validEmployeeRecord(v: unknown): boolean {
   if (!isPlainRecord(v)) return false;
   if (!isId(v.id)) return false;
@@ -98,7 +88,11 @@ export function validEmployeeRecord(v: unknown): boolean {
     return false;
   }
   if (!isNullableId(v.department_id) || !isNullableId(v.job_title_id)) return false;
-  if (!isNullableId(v.manager_id) || !isNullableId(v.user_id)) return false;
+  if (!isNullableId(v.manager_id)) return false;
+  /* Phase 3.3: user_id / user are no longer exposed. The record states only whether an account is linked. */
+  if (typeof v.has_account !== "boolean") return false;
+  if (!(v.employment_type === null || v.employment_type === "full_time" || v.employment_type === "part_time" || v.employment_type === "contract")) return false;
+  if (typeof v.is_trainee !== "boolean" || typeof v.has_picture !== "boolean") return false;
   if (!("hire_date" in v) || !isNullableDate(v.hire_date)) return false;
   if (!("termination_date" in v) || !isNullableDate(v.termination_date)) return false;
   /* Personal data is conditionally present (viewPersonalData policy). When
@@ -111,7 +105,7 @@ export function validEmployeeRecord(v: unknown): boolean {
   }
   if (v.national_id !== undefined && !isNullableString(v.national_id)) return false;
   if (!validEmbeddedDepartment(v.department) || !validEmbeddedDepartment(v.job_title)) return false;
-  if (!validManagerRef(v.manager) || !validUserRef(v.user)) return false;
+  if (!validManagerRef(v.manager)) return false;
   return true;
 }
 

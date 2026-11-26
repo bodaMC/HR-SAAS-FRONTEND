@@ -22,6 +22,10 @@ export interface FilterValues {
   job_title_id: string;
   manager_id: string;
   employment_status: string;
+  /** Phase 3.3: "" = current employees (the backend default), "former" or "all". */
+  scope: string;
+  employment_type: string;
+  is_trainee: string;
 }
 
 interface Option {
@@ -89,6 +93,9 @@ export function EmployeeDirectory({
       job_title_id: "",
       manager_id: "",
       employment_status: "",
+      scope: "",
+      employment_type: "",
+      is_trainee: "",
     };
     latest.current = empty;
     setValues(empty);
@@ -187,6 +194,44 @@ export function EmployeeDirectory({
               {t(`employees.statuses.${s}`)}
             </option>
           ))}
+        </select>
+        <select
+          name="scope"
+          value={values.scope}
+          onChange={(e) => change("scope", e.target.value)}
+          aria-label={t("employees.filterScope")}
+          data-testid="filter-scope"
+          className={SELECT_CLASS}
+        >
+          <option value="">{t("employees.scopes.current")}</option>
+          <option value="former">{t("employees.scopes.former")}</option>
+          <option value="all">{t("employees.scopes.all")}</option>
+        </select>
+        <select
+          name="employment_type"
+          value={values.employment_type}
+          onChange={(e) => change("employment_type", e.target.value)}
+          aria-label={t("employees.filterType")}
+          data-testid="filter-type"
+          className={SELECT_CLASS}
+        >
+          <option value="">{t("employees.filterType")}: {t("employees.all")}</option>
+          {["full_time", "part_time", "contract"].map((s) => (
+            <option key={s} value={s}>{t(`employeeForm.employmentTypes.${s}`)}</option>
+          ))}
+          <option value="none">{t("employees.typeNone")}</option>
+        </select>
+        <select
+          name="is_trainee"
+          value={values.is_trainee}
+          onChange={(e) => change("is_trainee", e.target.value)}
+          aria-label={t("employees.filterTrainee")}
+          data-testid="filter-trainee"
+          className={SELECT_CLASS}
+        >
+          <option value="">{t("employees.filterTrainee")}: {t("employees.traineeAny")}</option>
+          <option value="1">{t("employees.traineeYes")}</option>
+          <option value="0">{t("employees.traineeNo")}</option>
         </select>
         <button
           type="button"

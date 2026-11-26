@@ -16,6 +16,7 @@ import "server-only";
  */
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { fetchMe, type ApiResult } from "@/lib/server/api";
 import { SESSION_COOKIE } from "@/lib/server/session";
 import { parseAccess, type Capabilities } from "@/lib/access";
@@ -37,6 +38,7 @@ function validUserShape(u: unknown): u is ApiUser {
   if (typeof u.email !== "string") return false;
   if (typeof u.role !== "string") return false;
   if (u.is_active !== undefined && typeof u.is_active !== "boolean") return false;
+  if (u.must_change_password !== undefined && typeof u.must_change_password !== "boolean") return false;
   return true;
 }
 
@@ -88,5 +90,8 @@ export const requireSession = cache(async function requireSessionUncached(): Pro
   if (user.is_active === false || company?.is_active === false) {
     return { ok: false, reason: "inactive" };
   }
+  // Phase 3.3: a temporary-password session may only use the first-login page. The backend enforces the same rule
+  // on every API call; this keeps the UI from rendering pages whose data calls would all be refused.
+  if (user.must_change_password === true) redirect("/first-login");
   return { ok: true, token, user, company, caps: parseAccess(me.data.access) };
 });

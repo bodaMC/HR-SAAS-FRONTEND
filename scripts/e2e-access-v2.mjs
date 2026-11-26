@@ -18,9 +18,9 @@ async function session(email) {
 }
 const btn = (page, re) => page.getByRole('button', { name: re }).count();
 
-// ── labels, plural, user menu (HR persona, English then Arabic)
+// ── labels, plural, user menu (System Super Admin persona, Phase 3.3: HR holds no roles.*, English then Arabic)
 {
-  const { ctx, page } = await session('hr@orbit.example');
+  const { ctx, page } = await session('sysadmin@orbit.example');
   await page.goto(BASE + '/access', { waitUntil: 'networkidle' }); await page.getByTestId('access-page').waitFor();
   const hrCard = await page.getByTestId('role-hr_administrator').innerText();
   check('EN: role with one user reads "1 user" (not "1 users")', /\b1 user\b/.test(hrCard) && !/1 users/.test(hrCard), hrCard);
@@ -32,7 +32,7 @@ const btn = (page, re) => page.getByRole('button', { name: re }).count();
   check('EN: checkbox keeps the internal code in data-perm', (await page.locator('input[data-perm="employees.view"]').count()) === 1);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'User menu' }).click(); await page.getByTestId('user-menu').waitFor();
-  check('user menu: access role is the RBAC role, account type is separate', (await page.getByTestId('user-menu-access-role').innerText()).trim() === 'HR Administrator' && (await page.getByTestId('user-menu-account-type').innerText()).trim() === 'Employee');
+  check('user menu: access role is the RBAC role, account type is separate', (await page.getByTestId('user-menu-access-role').innerText()).trim() === 'System Super Admin' && (await page.getByTestId('user-menu-account-type').innerText()).trim() === 'Employee');
   await page.keyboard.press('Escape');
   await page.getByTestId('language-switcher').click(); await page.waitForFunction(() => document.documentElement.lang === 'ar');
   await page.waitForTimeout(500); await page.goto(BASE + '/access', { waitUntil: 'networkidle' }); await page.getByTestId('access-page').waitFor();
@@ -47,7 +47,7 @@ const btn = (page, re) => page.getByRole('button', { name: re }).count();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'قائمة المستخدم' }).click().catch(() => {});
   const arMenu = await page.getByTestId('user-menu-access-role').innerText().catch(() => '');
-  check('AR: user menu shows Arabic access role name', arMenu.includes('مسؤول الموارد البشرية'), arMenu);
+  check('AR: user menu shows Arabic access role name', arMenu.includes('مدير النظام الأعلى'), arMenu);
   await ctx.close();
 }
 // ── unbootstrapped owner: no RBAC role is shown as a role
@@ -110,7 +110,7 @@ for (const [email, who, exp] of [
   }
   {
     const { ctx, page } = await session('hr@orbit.example'); const sb = await side(page);
-    check('V3 HR sees Roles & Permissions only in Administration', (await sb.getByRole('link', { name: /Roles & Permissions/ }).count()) === 1 && (await sb.getByText('Audit Logs', { exact: true }).count()) === 0 && (await sb.getByText('Company Settings', { exact: true }).count()) === 0);
+    check('V3/3.3 HR sees no Roles & Permissions; operational Administration items are non-link roadmap entries', (await sb.getByText(/Roles & Permissions/).count()) === 0 && (await sb.getByText('Audit Logs', { exact: true }).count()) === 1 && (await sb.getByRole('link', { name: 'Audit Logs' }).count()) === 0);
     await ctx.close();
   }
   {
